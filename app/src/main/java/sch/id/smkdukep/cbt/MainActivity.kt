@@ -14,7 +14,7 @@ class MainActivity : AppCompatActivity() {
     private lateinit var webView: WebView
     
     // ⚙️ GANTI URL UJIAN ANDA DI SINI
-    private val examUrl = "https://smkdukep.sch.id"
+    private val examUrl = "https://smkdukep.sch.id/cbt/login"
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
