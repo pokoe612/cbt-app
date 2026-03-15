@@ -4,11 +4,11 @@ plugins {
 }
 
 android {
-    namespace = "com.sekolah.examapp"
+    namespace = "sch.id.smkdukep.cbt"           // <-- UBAH INI
     compileSdk = 34
 
     defaultConfig {
-        applicationId = "com.sekolah.examapp"
+        applicationId = "sch.id.smkdukep.cbt"    // <-- UBAH INI
         minSdk = 21
         targetSdk = 34
         versionCode = 1
