@@ -4,11 +4,14 @@ import android.app.AlertDialog
 import android.app.admin.DevicePolicyManager
 import android.content.ComponentName
 import android.content.Context
+import android.content.Intent  // <-- TAMBAHKAN INI
 import android.os.Build
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
 import android.view.KeyEvent
+import android.view.View  // <-- TAMBAHKAN INI
+import android.webkit.CookieManager  // <-- TAMBAHKAN INI
 import android.webkit.WebSettings
 import android.webkit.WebView
 import android.webkit.WebViewClient
@@ -70,7 +73,6 @@ class MainActivity : AppCompatActivity() {
             KeyEvent.KEYCODE_HOME,
             KeyEvent.KEYCODE_APP_SWITCH -> {
                 Toast.makeText(this, "⚠️ Tidak bisa keluar dari mode ujian", Toast.LENGTH_LONG).show()
-                // Re-lock task jika mencoba keluar
                 handler.postDelayed({
                     enableLockTask()
                 }, 100)
@@ -83,11 +85,9 @@ class MainActivity : AppCompatActivity() {
     override fun onWindowFocusChanged(hasFocus: Boolean) {
         super.onWindowFocusChanged(hasFocus)
         if (!hasFocus && !isExiting) {
-            // Aplikasi kehilangan fokus (mungkin user coba keluar)
             handler.postDelayed({
                 if (!isExiting) {
                     enableLockTask()
-                    // Force kembali ke aplikasi
                     val intent = packageManager.getLaunchIntentForPackage(packageName)
                     intent?.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP)
                     startActivity(intent)
@@ -96,13 +96,7 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    override fun onTaskDescriptionChanged() {
-        super.onTaskDescriptionChanged()
-        // Deteksi perubahan task (user coba keluar)
-        if (!isExiting) {
-            enableLockTask()
-        }
-    }
+    // HAPUS fungsi onTaskDescriptionChanged karena tidak diperlukan
 
     private fun showExitConfirmation() {
         AlertDialog.Builder(this)
@@ -119,33 +113,26 @@ class MainActivity : AppCompatActivity() {
     private fun performLogout() {
         isExiting = true
         
-        // Matikan lock task
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
             stopLockTask()
         }
         
-        // Muat URL logout
         webView.loadUrl(logoutUrl)
         
-        // Tunggu sebentar untuk proses logout
         handler.postDelayed({
-            // Clear semua data WebView (opsional, untuk bersihkan session)
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
                 webView.clearHistory()
                 webView.clearCache(true)
                 CookieManager.getInstance().removeAllCookies(null)
             }
-            
-            // Tutup aplikasi
             finishAffinity()
-        }, 1500) // Delay 1.5 detik
+        }, 1500)
     }
 
     private fun enableLockTask() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP && !isExiting) {
             try {
                 startLockTask()
-                // Sembunyikan navigation bar dan status bar
                 hideSystemUI()
             } catch (e: Exception) {
                 e.printStackTrace()
