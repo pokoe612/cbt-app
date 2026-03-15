@@ -1,2 +1,2 @@
-# exam-app
+# cbt-app
 Aplikasi Ujian Sekolah
