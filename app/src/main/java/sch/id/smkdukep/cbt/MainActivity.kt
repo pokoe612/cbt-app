@@ -30,6 +30,7 @@ class MainActivity : AppCompatActivity() {
     private val logoutUrl = "https://smkdukep.sch.id/cbt/logout"
     
     private var isExiting = false
+    private var isAlertShowing = false // Flag untuk alert
     private var countdownHandler = Handler(Looper.getMainLooper())
     private var countdownRunnable: Runnable? = null
 
@@ -54,7 +55,9 @@ class MainActivity : AppCompatActivity() {
         webView.webViewClient = object : WebViewClient() {
             override fun onPageFinished(view: WebView?, url: String?) {
                 super.onPageFinished(view, url)
-                enableLockTask()
+                if (!isAlertShowing) { // Hanya lock jika tidak ada alert
+                    enableLockTask()
+                }
             }
         }
         
@@ -75,10 +78,12 @@ class MainActivity : AppCompatActivity() {
             }
             KeyEvent.KEYCODE_HOME,
             KeyEvent.KEYCODE_APP_SWITCH -> {
-                Toast.makeText(this, "⚠️ Tidak bisa keluar dari mode ujian", Toast.LENGTH_LONG).show()
-                handler.postDelayed({
-                    enableLockTask()
-                }, 100)
+                if (!isAlertShowing) { // Hanya tampilkan toast jika tidak ada alert
+                    Toast.makeText(this, "⚠️ Tidak bisa keluar dari mode ujian", Toast.LENGTH_LONG).show()
+                    handler.postDelayed({
+                        enableLockTask()
+                    }, 100)
+                }
                 return true
             }
         }
@@ -87,9 +92,9 @@ class MainActivity : AppCompatActivity() {
 
     override fun onWindowFocusChanged(hasFocus: Boolean) {
         super.onWindowFocusChanged(hasFocus)
-        if (!hasFocus && !isExiting) {
+        if (!hasFocus && !isExiting && !isAlertShowing) { // Abaikan jika alert sedang muncul
             handler.postDelayed({
-                if (!isExiting) {
+                if (!isExiting && !isAlertShowing) {
                     enableLockTask()
                     val intent = packageManager.getLaunchIntentForPackage(packageName)
                     intent?.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP)
@@ -106,6 +111,14 @@ class MainActivity : AppCompatActivity() {
      * - Diam 5 detik → Otomatis Batal
      */
     private fun showExitConfirmation() {
+        // Set flag alert sedang muncul
+        isAlertShowing = true
+        
+        // Nonaktifkan lock task sementara agar alert bisa jalan normal
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+            stopLockTask()
+        }
+        
         // Batalkan timer sebelumnya jika ada
         countdownRunnable?.let { countdownHandler.removeCallbacks(it) }
         
@@ -116,12 +129,16 @@ class MainActivity : AppCompatActivity() {
             .setPositiveButton("Ya, Keluar") { _, _ ->
                 // User memilih Ya
                 countdownRunnable?.let { countdownHandler.removeCallbacks(it) }
+                isAlertShowing = false
                 performLogout()
             }
             .setNegativeButton("Batal") { _, _ ->
                 // User memilih Batal
                 countdownRunnable?.let { countdownHandler.removeCallbacks(it) }
+                isAlertShowing = false
                 Toast.makeText(this, "✅ Ujian dilanjutkan", Toast.LENGTH_SHORT).show()
+                // Aktifkan lock task kembali
+                enableLockTask()
             }
             .setCancelable(false)
             .create()
@@ -132,7 +149,10 @@ class MainActivity : AppCompatActivity() {
         countdownRunnable = Runnable {
             if (dialog.isShowing) {
                 dialog.dismiss()
+                isAlertShowing = false
                 Toast.makeText(this, "⏱️ Tidak ada pilihan, ujian dilanjutkan", Toast.LENGTH_SHORT).show()
+                // Aktifkan lock task kembali
+                enableLockTask()
             }
         }
         
@@ -169,7 +189,7 @@ class MainActivity : AppCompatActivity() {
      * Mengaktifkan lock task dan menyembunyikan UI
      */
     private fun enableLockTask() {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP && !isExiting) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP && !isExiting && !isAlertShowing) {
             try {
                 startLockTask()
                 hideSystemUI()
