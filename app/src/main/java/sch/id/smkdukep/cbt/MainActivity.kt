@@ -4,14 +4,14 @@ import android.app.AlertDialog
 import android.app.admin.DevicePolicyManager
 import android.content.ComponentName
 import android.content.Context
-import android.content.Intent  // <-- TAMBAHKAN INI
+import android.content.Intent
 import android.os.Build
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
 import android.view.KeyEvent
-import android.view.View  // <-- TAMBAHKAN INI
-import android.webkit.CookieManager  // <-- TAMBAHKAN INI
+import android.view.View
+import android.webkit.CookieManager
 import android.webkit.WebSettings
 import android.webkit.WebView
 import android.webkit.WebViewClient
@@ -25,11 +25,13 @@ class MainActivity : AppCompatActivity() {
     private lateinit var devicePolicyManager: DevicePolicyManager
     private lateinit var adminComponent: ComponentName
     
-    // ⚙️ URL UJIAN
+    // URL UJIAN
     private val examUrl = "https://smkdukep.sch.id/cbt/login"
     private val logoutUrl = "https://smkdukep.sch.id/cbt/logout"
     
-    private var isExiting = false // Cegah multiple calls
+    private var isExiting = false
+    private var countdownHandler = Handler(Looper.getMainLooper())
+    private var countdownRunnable: Runnable? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -39,6 +41,7 @@ class MainActivity : AppCompatActivity() {
         devicePolicyManager = getSystemService(Context.DEVICE_POLICY_SERVICE) as DevicePolicyManager
         adminComponent = ComponentName(this, AdminReceiver::class.java)
         
+        // Setup WebView
         webView = findViewById(R.id.webView)
         
         webView.settings.apply {
@@ -96,29 +99,62 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    // HAPUS fungsi onTaskDescriptionChanged karena tidak diperlukan
-
+    /**
+     * Menampilkan konfirmasi keluar selama 5 detik
+     * - Klik Ya → Logout
+     * - Klik Batal → Batal
+     * - Diam 5 detik → Otomatis Batal
+     */
     private fun showExitConfirmation() {
-        AlertDialog.Builder(this)
+        // Batalkan timer sebelumnya jika ada
+        countdownRunnable?.let { countdownHandler.removeCallbacks(it) }
+        
+        // Buat dialog
+        val dialog = AlertDialog.Builder(this)
             .setTitle("⚠️ Konfirmasi Keluar")
-            .setMessage("Anda yakin ingin keluar dari aplikasi? Ini akan mengakhiri sesi ujian Anda.")
+            .setMessage("Anda yakin ingin keluar dari aplikasi? Ini akan mengakhiri sesi ujian Anda.\n\n⏱️ Alert akan otomatis tertutup dalam 5 detik jika tidak ada pilihan.")
             .setPositiveButton("Ya, Keluar") { _, _ ->
+                // User memilih Ya
+                countdownRunnable?.let { countdownHandler.removeCallbacks(it) }
                 performLogout()
             }
-            .setNegativeButton("Batal", null)
+            .setNegativeButton("Batal") { _, _ ->
+                // User memilih Batal
+                countdownRunnable?.let { countdownHandler.removeCallbacks(it) }
+                Toast.makeText(this, "✅ Ujian dilanjutkan", Toast.LENGTH_SHORT).show()
+            }
             .setCancelable(false)
-            .show()
+            .create()
+        
+        dialog.show()
+        
+        // Timer 5 detik untuk auto close (dianggap batal)
+        countdownRunnable = Runnable {
+            if (dialog.isShowing) {
+                dialog.dismiss()
+                Toast.makeText(this, "⏱️ Tidak ada pilihan, ujian dilanjutkan", Toast.LENGTH_SHORT).show()
+            }
+        }
+        
+        // Jalankan timer 5 detik
+        countdownHandler.postDelayed(countdownRunnable!!, 5000)
     }
 
+    /**
+     * Proses logout dan keluar aplikasi
+     */
     private fun performLogout() {
         isExiting = true
         
+        // Matikan lock task
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
             stopLockTask()
         }
         
+        // Load URL logout
         webView.loadUrl(logoutUrl)
         
+        // Tunggu sebentar lalu tutup aplikasi
         handler.postDelayed({
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
                 webView.clearHistory()
@@ -129,6 +165,9 @@ class MainActivity : AppCompatActivity() {
         }, 1500)
     }
 
+    /**
+     * Mengaktifkan lock task dan menyembunyikan UI
+     */
     private fun enableLockTask() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP && !isExiting) {
             try {
@@ -140,6 +179,9 @@ class MainActivity : AppCompatActivity() {
         }
     }
     
+    /**
+     * Menyembunyikan navigation bar dan status bar
+     */
     private fun hideSystemUI() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.KITKAT) {
             window.decorView.systemUiVisibility = (
@@ -155,5 +197,6 @@ class MainActivity : AppCompatActivity() {
     override fun onDestroy() {
         super.onDestroy()
         handler.removeCallbacksAndMessages(null)
+        countdownHandler.removeCallbacksAndMessages(null)
     }
 }
