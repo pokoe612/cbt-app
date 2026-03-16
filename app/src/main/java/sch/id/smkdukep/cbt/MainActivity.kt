@@ -9,6 +9,7 @@ import android.os.Build
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
+import android.util.Log
 import android.view.KeyEvent
 import android.view.View
 import android.webkit.CookieManager
@@ -21,26 +22,20 @@ import androidx.appcompat.app.AppCompatActivity
 class MainActivity : AppCompatActivity() {
 
     private lateinit var webView: WebView
-    private val handler = Handler(Looper.getMainLooper())
-    private lateinit var devicePolicyManager: DevicePolicyManager
-    private lateinit var adminComponent: ComponentName
+    private val mainHandler = Handler(Looper.getMainLooper())
+    private val alertHandler = Handler(Looper.getMainLooper())
     
     // URL UJIAN
     private val examUrl = "https://smkdukep.sch.id/cbt/login"
     private val logoutUrl = "https://smkdukep.sch.id/cbt/logout"
     
     private var isExiting = false
-    private var isAlertShowing = false // Flag untuk alert
-    private var countdownHandler = Handler(Looper.getMainLooper())
-    private var countdownRunnable: Runnable? = null
+    private var isAlertShowing = false
+    private var alertTimerRunnable: Runnable? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
-        
-        // Inisialisasi DevicePolicyManager
-        devicePolicyManager = getSystemService(Context.DEVICE_POLICY_SERVICE) as DevicePolicyManager
-        adminComponent = ComponentName(this, AdminReceiver::class.java)
         
         // Setup WebView
         webView = findViewById(R.id.webView)
@@ -55,7 +50,7 @@ class MainActivity : AppCompatActivity() {
         webView.webViewClient = object : WebViewClient() {
             override fun onPageFinished(view: WebView?, url: String?) {
                 super.onPageFinished(view, url)
-                if (!isAlertShowing) { // Hanya lock jika tidak ada alert
+                if (!isAlertShowing && !isExiting) {
                     enableLockTask()
                 }
             }
@@ -78,9 +73,9 @@ class MainActivity : AppCompatActivity() {
             }
             KeyEvent.KEYCODE_HOME,
             KeyEvent.KEYCODE_APP_SWITCH -> {
-                if (!isAlertShowing) { // Hanya tampilkan toast jika tidak ada alert
-                    Toast.makeText(this, "⚠️ Tidak bisa keluar dari mode ujian", Toast.LENGTH_LONG).show()
-                    handler.postDelayed({
+                if (!isAlertShowing) {
+                    Toast.makeText(this, "⚠️ Mode Ujian Aktif", Toast.LENGTH_SHORT).show()
+                    mainHandler.postDelayed({
                         enableLockTask()
                     }, 100)
                 }
@@ -92,8 +87,8 @@ class MainActivity : AppCompatActivity() {
 
     override fun onWindowFocusChanged(hasFocus: Boolean) {
         super.onWindowFocusChanged(hasFocus)
-        if (!hasFocus && !isExiting && !isAlertShowing) { // Abaikan jika alert sedang muncul
-            handler.postDelayed({
+        if (!hasFocus && !isExiting && !isAlertShowing) {
+            mainHandler.postDelayed({
                 if (!isExiting && !isAlertShowing) {
                     enableLockTask()
                     val intent = packageManager.getLaunchIntentForPackage(packageName)
@@ -105,77 +100,71 @@ class MainActivity : AppCompatActivity() {
     }
 
     /**
-     * Menampilkan konfirmasi keluar selama 5 detik
-     * - Klik Ya → Logout
-     * - Klik Batal → Batal
-     * - Diam 5 detik → Otomatis Batal
+     * Menampilkan konfirmasi keluar selama 1 DETIK
      */
     private fun showExitConfirmation() {
-        // Set flag alert sedang muncul
+        if (isAlertShowing) return
+        
         isAlertShowing = true
         
-        // Nonaktifkan lock task sementara agar alert bisa jalan normal
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
             stopLockTask()
         }
         
-        // Batalkan timer sebelumnya jika ada
-        countdownRunnable?.let { countdownHandler.removeCallbacks(it) }
+        alertTimerRunnable?.let { alertHandler.removeCallbacks(it) }
         
-        // Buat dialog
         val dialog = AlertDialog.Builder(this)
             .setTitle("⚠️ Konfirmasi Keluar")
-            .setMessage("Anda yakin ingin keluar dari aplikasi? Ini akan mengakhiri sesi ujian Anda.\n\n⏱️ Alert akan otomatis tertutup dalam 1 detik jika tidak ada pilihan.")
+            .setMessage("Anda yakin ingin keluar dari aplikasi? Ini akan mengakhiri sesi ujian Anda.\n\n⏱️ Alert akan otomatis tertutup dalam 1 DETIK jika tidak ada pilihan.")
             .setPositiveButton("Ya, Keluar") { _, _ ->
-                // User memilih Ya
-                countdownRunnable?.let { countdownHandler.removeCallbacks(it) }
+                alertTimerRunnable?.let { alertHandler.removeCallbacks(it) }
                 isAlertShowing = false
                 performLogout()
             }
             .setNegativeButton("Batal") { _, _ ->
-                // User memilih Batal
-                countdownRunnable?.let { countdownHandler.removeCallbacks(it) }
+                alertTimerRunnable?.let { alertHandler.removeCallbacks(it) }
                 isAlertShowing = false
                 Toast.makeText(this, "✅ Ujian dilanjutkan", Toast.LENGTH_SHORT).show()
-                // Aktifkan lock task kembali
-                enableLockTask()
+                reactivateLockTask()
             }
             .setCancelable(false)
             .create()
         
         dialog.show()
         
-        // Timer 5 detik untuk auto close (dianggap batal)
-        countdownRunnable = Runnable {
+        // Timer 1 DETIK untuk auto close
+        alertTimerRunnable = Runnable {
             if (dialog.isShowing) {
                 dialog.dismiss()
                 isAlertShowing = false
-                Toast.makeText(this, "⏱️ Tidak ada pilihan, ujian dilanjutkan", Toast.LENGTH_SHORT).show()
-                // Aktifkan lock task kembali
-                enableLockTask()
+                Toast.makeText(this, "⏱️ Waktu habis, ujian dilanjutkan", Toast.LENGTH_SHORT).show()
+                reactivateLockTask()
             }
         }
         
-        // Jalankan timer 5 detik
-        countdownHandler.postDelayed(countdownRunnable!!, 1000)
+        alertHandler.postDelayed(alertTimerRunnable!!, 1000) // 1000ms = 1 detik
     }
 
-    /**
-     * Proses logout dan keluar aplikasi
-     */
+    private fun reactivateLockTask() {
+        mainHandler.postDelayed({
+            if (!isExiting && !isAlertShowing) {
+                enableLockTask()
+                Log.d("LockTask", "Lock task diaktifkan kembali")
+            }
+        }, 300)
+    }
+
     private fun performLogout() {
         isExiting = true
+        isAlertShowing = false
         
-        // Matikan lock task
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
             stopLockTask()
         }
         
-        // Load URL logout
         webView.loadUrl(logoutUrl)
         
-        // Tunggu sebentar lalu tutup aplikasi
-        handler.postDelayed({
+        mainHandler.postDelayed({
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
                 webView.clearHistory()
                 webView.clearCache(true)
@@ -185,23 +174,18 @@ class MainActivity : AppCompatActivity() {
         }, 1500)
     }
 
-    /**
-     * Mengaktifkan lock task dan menyembunyikan UI
-     */
     private fun enableLockTask() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP && !isExiting && !isAlertShowing) {
             try {
                 startLockTask()
                 hideSystemUI()
+                Log.d("LockTask", "Lock task aktif")
             } catch (e: Exception) {
                 e.printStackTrace()
             }
         }
     }
     
-    /**
-     * Menyembunyikan navigation bar dan status bar
-     */
     private fun hideSystemUI() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.KITKAT) {
             window.decorView.systemUiVisibility = (
@@ -216,7 +200,7 @@ class MainActivity : AppCompatActivity() {
 
     override fun onDestroy() {
         super.onDestroy()
-        handler.removeCallbacksAndMessages(null)
-        countdownHandler.removeCallbacksAndMessages(null)
+        mainHandler.removeCallbacksAndMessages(null)
+        alertHandler.removeCallbacksAndMessages(null)
     }
 }
