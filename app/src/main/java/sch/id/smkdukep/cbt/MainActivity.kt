@@ -157,7 +157,7 @@ class MainActivity : AppCompatActivity() {
         }
         
         // Jalankan timer 5 detik
-        countdownHandler.postDelayed(countdownRunnable!!, 5000)
+        countdownHandler.postDelayed(countdownRunnable!!, 2500)
     }
 
     /**
