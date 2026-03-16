@@ -6,7 +6,6 @@ import android.content.ComponentName
 import android.content.Context
 import android.os.Build
 import android.os.Bundle
-import android.view.KeyEvent
 import android.view.View
 import android.view.WindowManager
 import android.webkit.CookieManager
@@ -29,7 +28,7 @@ class MainActivity : AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        // Anti Screenshot
+        // Blok Screenshot
         window.setFlags(
             WindowManager.LayoutParams.FLAG_SECURE,
             WindowManager.LayoutParams.FLAG_SECURE
@@ -37,12 +36,12 @@ class MainActivity : AppCompatActivity() {
 
         setContentView(R.layout.activity_main)
 
+        webView = findViewById(R.id.webView)
+
         devicePolicyManager =
             getSystemService(Context.DEVICE_POLICY_SERVICE) as DevicePolicyManager
 
         adminComponent = ComponentName(this, AdminReceiver::class.java)
-
-        webView = findViewById(R.id.webView)
 
         setupWebView()
 
@@ -53,6 +52,9 @@ class MainActivity : AppCompatActivity() {
         startKioskMode()
     }
 
+    /**
+     * Setup WebView untuk CBT
+     */
     private fun setupWebView() {
 
         webView.settings.apply {
@@ -60,13 +62,22 @@ class MainActivity : AppCompatActivity() {
             javaScriptEnabled = true
             domStorageEnabled = true
             databaseEnabled = true
+
             allowFileAccess = true
 
             useWideViewPort = true
             loadWithOverviewMode = true
 
             cacheMode = WebSettings.LOAD_NO_CACHE
+
+            setSupportZoom(false)
+            builtInZoomControls = false
+            displayZoomControls = false
         }
+
+        // Blok copy soal
+        webView.setOnLongClickListener { true }
+        webView.isLongClickable = false
 
         webView.webViewClient = object : WebViewClient() {
 
@@ -80,13 +91,14 @@ class MainActivity : AppCompatActivity() {
                 }
 
                 view?.loadUrl(url)
+
                 return true
             }
         }
     }
 
     /**
-     * Mode kiosk (lock task)
+     * Mode Kiosk (blok HOME dan RECENT)
      */
     private fun startKioskMode() {
 
@@ -100,9 +112,9 @@ class MainActivity : AppCompatActivity() {
                         adminComponent,
                         arrayOf(packageName)
                     )
-
-                    startLockTask()
                 }
+
+                startLockTask()
 
             } catch (e: Exception) {
                 e.printStackTrace()
@@ -111,37 +123,28 @@ class MainActivity : AppCompatActivity() {
     }
 
     /**
-     * Fullscreen immersive
+     * Fullscreen
      */
     private fun hideSystemUI() {
 
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.KITKAT) {
+        window.decorView.systemUiVisibility =
+            View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY or
+                    View.SYSTEM_UI_FLAG_FULLSCREEN or
+                    View.SYSTEM_UI_FLAG_HIDE_NAVIGATION or
+                    View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION or
+                    View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN
+    }
 
-            window.decorView.systemUiVisibility =
-                View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY or
-                        View.SYSTEM_UI_FLAG_FULLSCREEN or
-                        View.SYSTEM_UI_FLAG_HIDE_NAVIGATION or
-                        View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION or
-                        View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN
+    override fun onWindowFocusChanged(hasFocus: Boolean) {
+        super.onWindowFocusChanged(hasFocus)
+
+        if (hasFocus) {
+            hideSystemUI()
         }
     }
 
     /**
-     * Blok tombol Home / Recent
-     */
-    override fun onKeyDown(keyCode: Int, event: KeyEvent?): Boolean {
-
-        if (keyCode == KeyEvent.KEYCODE_HOME ||
-            keyCode == KeyEvent.KEYCODE_APP_SWITCH
-        ) {
-            return true
-        }
-
-        return super.onKeyDown(keyCode, event)
-    }
-
-    /**
-     * Tombol back
+     * Tombol BACK
      */
     override fun onBackPressed() {
         showExitConfirmation()
@@ -182,13 +185,5 @@ class MainActivity : AppCompatActivity() {
         }
 
         finishAffinity()
-    }
-
-    override fun onWindowFocusChanged(hasFocus: Boolean) {
-        super.onWindowFocusChanged(hasFocus)
-
-        if (hasFocus) {
-            hideSystemUI()
-        }
     }
 }
