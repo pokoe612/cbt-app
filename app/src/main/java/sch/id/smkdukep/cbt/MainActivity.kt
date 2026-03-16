@@ -143,7 +143,14 @@ class MainActivity : AppCompatActivity() {
 
             if (activityManager.lockTaskModeState == ActivityManager.LOCK_TASK_MODE_NONE) {
 
-                 finishAffinity()
+                AlertDialog.Builder(this)
+                    .setTitle("Perhatian!")
+                    .setMessage("Aplikasi harus disematkan untuk memulai ujian.")
+                    .setCancelable(false)
+                    .setPositiveButton("Tutup") { _, _ ->
+                        finishAffinity()
+                    }
+                    .show()
             }
         }
     }
