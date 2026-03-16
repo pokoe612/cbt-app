@@ -133,6 +133,7 @@ class MainActivity : AppCompatActivity() {
 
     /**
      * 🔒 Cek apakah aplikasi benar-benar disematkan
+     * jika tidak → langsung keluar
      */
     private fun checkLockTaskActive() {
 
@@ -142,15 +143,7 @@ class MainActivity : AppCompatActivity() {
                 getSystemService(Context.ACTIVITY_SERVICE) as ActivityManager
 
             if (activityManager.lockTaskModeState == ActivityManager.LOCK_TASK_MODE_NONE) {
-
-                AlertDialog.Builder(this)
-                    .setTitle("Mode Ujian Belum Aktif")
-                    .setMessage("Aplikasi harus disematkan untuk memulai ujian.")
-                    .setCancelable(false)
-                    .setPositiveButton("Tutup Aplikasi") { _, _ ->
-                        finishAffinity()
-                    }
-                    .show()
+                finishAffinity()
             }
         }
     }
@@ -191,7 +184,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     /**
-     * Konfirmasi keluar
+     * Konfirmasi keluar ujian
      */
     private fun showExitConfirmation() {
 
