@@ -133,7 +133,6 @@ class MainActivity : AppCompatActivity() {
 
     /**
      * 🔒 Cek apakah aplikasi benar-benar disematkan
-     * jika tidak → langsung keluar
      */
     private fun checkLockTaskActive() {
 
@@ -143,7 +142,8 @@ class MainActivity : AppCompatActivity() {
                 getSystemService(Context.ACTIVITY_SERVICE) as ActivityManager
 
             if (activityManager.lockTaskModeState == ActivityManager.LOCK_TASK_MODE_NONE) {
-                finishAffinity()
+
+                 finishAffinity()
             }
         }
     }
@@ -184,7 +184,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     /**
-     * Konfirmasi keluar ujian
+     * Konfirmasi keluar
      */
     private fun showExitConfirmation() {
 
