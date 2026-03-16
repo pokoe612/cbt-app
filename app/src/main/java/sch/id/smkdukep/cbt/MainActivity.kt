@@ -6,15 +6,13 @@ import android.content.ComponentName
 import android.content.Context
 import android.os.Build
 import android.os.Bundle
-import android.os.Handler
-import android.os.Looper
 import android.view.KeyEvent
 import android.view.View
+import android.view.WindowManager
 import android.webkit.CookieManager
 import android.webkit.WebSettings
 import android.webkit.WebView
 import android.webkit.WebViewClient
-import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 
 class MainActivity : AppCompatActivity() {
@@ -22,181 +20,175 @@ class MainActivity : AppCompatActivity() {
     private lateinit var webView: WebView
     private lateinit var devicePolicyManager: DevicePolicyManager
     private lateinit var adminComponent: ComponentName
-    
-    private val mainHandler = Handler(Looper.getMainLooper())
-    
-    // URL UJIAN
+
     private val examUrl = "https://smkdukep.sch.id/cbt/login"
     private val logoutUrl = "https://smkdukep.sch.id/cbt/logout"
-    
+
     private var isExiting = false
-    private var isAlertShowing = false
-    private var lockCheckRunnable: Runnable? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+
+        // Anti Screenshot
+        window.setFlags(
+            WindowManager.LayoutParams.FLAG_SECURE,
+            WindowManager.LayoutParams.FLAG_SECURE
+        )
+
         setContentView(R.layout.activity_main)
-        
-        // Setup WebView
+
+        devicePolicyManager =
+            getSystemService(Context.DEVICE_POLICY_SERVICE) as DevicePolicyManager
+
+        adminComponent = ComponentName(this, AdminReceiver::class.java)
+
         webView = findViewById(R.id.webView)
-        
-        webView.settings.apply {
-            javaScriptEnabled = true
-            domStorageEnabled = true
-            allowFileAccess = true
-            cacheMode = WebSettings.LOAD_NO_CACHE
-        }
-        
-        webView.webViewClient = object : WebViewClient() {
-            override fun onPageFinished(view: WebView?, url: String?) {
-                super.onPageFinished(view, url)
-                // Aktifkan lock task sekali saja
-                enableLockTaskOnce()
-            }
-        }
-        
+
+        setupWebView()
+
         webView.loadUrl(examUrl)
-        enableLockTaskOnce()
+
+        hideSystemUI()
+
+        startKioskMode()
     }
 
-    override fun onKeyDown(keyCode: Int, event: KeyEvent?): Boolean {
-        when (keyCode) {
-            KeyEvent.KEYCODE_BACK -> {
-                showExitConfirmation()
-                return true
-            }
-            KeyEvent.KEYCODE_HOME,
-            KeyEvent.KEYCODE_APP_SWITCH -> {
-                // Tidak perlu melakukan apa-apa, lock task sudah aktif
+    private fun setupWebView() {
+
+        webView.settings.apply {
+
+            javaScriptEnabled = true
+            domStorageEnabled = true
+            databaseEnabled = true
+            allowFileAccess = true
+
+            useWideViewPort = true
+            loadWithOverviewMode = true
+
+            cacheMode = WebSettings.LOAD_NO_CACHE
+        }
+
+        webView.webViewClient = object : WebViewClient() {
+
+            override fun shouldOverrideUrlLoading(view: WebView?, url: String?): Boolean {
+
+                if (url == null) return false
+
+                if (url.contains("logout")) {
+                    performLogout()
+                    return true
+                }
+
+                view?.loadUrl(url)
                 return true
             }
         }
+    }
+
+    /**
+     * Mode kiosk (lock task)
+     */
+    private fun startKioskMode() {
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+
+            try {
+
+                if (devicePolicyManager.isDeviceOwnerApp(packageName)) {
+
+                    devicePolicyManager.setLockTaskPackages(
+                        adminComponent,
+                        arrayOf(packageName)
+                    )
+
+                    startLockTask()
+                }
+
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
+        }
+    }
+
+    /**
+     * Fullscreen immersive
+     */
+    private fun hideSystemUI() {
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.KITKAT) {
+
+            window.decorView.systemUiVisibility =
+                View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY or
+                        View.SYSTEM_UI_FLAG_FULLSCREEN or
+                        View.SYSTEM_UI_FLAG_HIDE_NAVIGATION or
+                        View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION or
+                        View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN
+        }
+    }
+
+    /**
+     * Blok tombol Home / Recent
+     */
+    override fun onKeyDown(keyCode: Int, event: KeyEvent?): Boolean {
+
+        if (keyCode == KeyEvent.KEYCODE_HOME ||
+            keyCode == KeyEvent.KEYCODE_APP_SWITCH
+        ) {
+            return true
+        }
+
         return super.onKeyDown(keyCode, event)
+    }
+
+    /**
+     * Tombol back
+     */
+    override fun onBackPressed() {
+        showExitConfirmation()
+    }
+
+    /**
+     * Konfirmasi keluar
+     */
+    private fun showExitConfirmation() {
+
+        AlertDialog.Builder(this)
+            .setTitle("Konfirmasi Keluar")
+            .setMessage("Apakah Anda yakin ingin keluar dari ujian?")
+            .setPositiveButton("Ya") { _, _ ->
+                performLogout()
+            }
+            .setNegativeButton("Batal", null)
+            .setCancelable(false)
+            .show()
+    }
+
+    /**
+     * Logout CBT
+     */
+    private fun performLogout() {
+
+        isExiting = true
+
+        webView.loadUrl(logoutUrl)
+
+        webView.clearHistory()
+        webView.clearCache(true)
+
+        CookieManager.getInstance().removeAllCookies(null)
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+            stopLockTask()
+        }
+
+        finishAffinity()
     }
 
     override fun onWindowFocusChanged(hasFocus: Boolean) {
         super.onWindowFocusChanged(hasFocus)
-        
-        // Hanya cek lock task jika aplikasi mendapat fokus dan tidak dalam keadaan exiting
-        if (hasFocus && !isExiting && !isAlertShowing) {
-            // Cek sekali, tanpa loop terus menerus
-            mainHandler.postDelayed({
-                checkLockTask()
-            }, 500)
-        }
-    }
 
-    /**
-     * Aktifkan lock task sekali saja
-     */
-    private fun enableLockTaskOnce() {
-        if (isExiting || isAlertShowing) return
-        
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
-            try {
-                startLockTask()
-                hideSystemUI()
-            } catch (e: Exception) {
-                e.printStackTrace()
-            }
+        if (hasFocus) {
+            hideSystemUI()
         }
-    }
-
-    /**
-     * Cek status lock task tanpa loop mengganggu
-     */
-    private fun checkLockTask() {
-        if (isExiting || isAlertShowing) return
-        
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
-            try {
-                // Coba aktifkan lagi, jika sudah aktif tidak akan muncul notifikasi
-                startLockTask()
-                hideSystemUI()
-            } catch (e: Exception) {
-                // Abaikan error
-            }
-        }
-    }
-
-    /**
-     * Menampilkan konfirmasi keluar
-     */
-    private fun showExitConfirmation() {
-        if (isAlertShowing) return
-        
-        isAlertShowing = true
-        
-        // Matikan lock task sementara agar alert bisa muncul
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
-            try {
-                stopLockTask()
-            } catch (e: Exception) {
-                e.printStackTrace()
-            }
-        }
-        
-        val dialog = AlertDialog.Builder(this)
-            .setTitle("⚠️ Konfirmasi Keluar")
-            .setMessage("Anda yakin ingin keluar dari aplikasi? Ini akan mengakhiri sesi ujian Anda.")
-            .setPositiveButton("Ya, Keluar") { _, _ ->
-                isAlertShowing = false
-                performLogout()
-            }
-            .setNegativeButton("Batal") { _, _ ->
-                isAlertShowing = false
-                // Aktifkan lock task kembali
-                enableLockTaskOnce()
-            }
-            .setCancelable(false)
-            .create()
-        
-        dialog.show()
-        
-        // Tidak ada timer auto close
-    }
-
-    /**
-     * Proses logout
-     */
-    private fun performLogout() {
-        isExiting = true
-        isAlertShowing = false
-        
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
-            try {
-                stopLockTask()
-            } catch (e: Exception) {
-                e.printStackTrace()
-            }
-        }
-        
-        webView.loadUrl(logoutUrl)
-        
-        mainHandler.postDelayed({
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
-                webView.clearHistory()
-                webView.clearCache(true)
-                CookieManager.getInstance().removeAllCookies(null)
-            }
-            finishAffinity()
-        }, 1500)
-    }
-    
-    private fun hideSystemUI() {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.KITKAT) {
-            window.decorView.systemUiVisibility = (
-                    View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY
-                    or View.SYSTEM_UI_FLAG_HIDE_NAVIGATION
-                    or View.SYSTEM_UI_FLAG_FULLSCREEN
-                    or View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION
-                    or View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN
-                    )
-        }
-    }
-
-    override fun onDestroy() {
-        super.onDestroy()
-        mainHandler.removeCallbacksAndMessages(null)
     }
 }
