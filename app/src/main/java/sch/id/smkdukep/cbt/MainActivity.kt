@@ -125,7 +125,7 @@ class MainActivity : AppCompatActivity() {
         // Buat dialog
         val dialog = AlertDialog.Builder(this)
             .setTitle("⚠️ Konfirmasi Keluar")
-            .setMessage("Anda yakin ingin keluar dari aplikasi? Ini akan mengakhiri sesi ujian Anda.\n\n⏱️ Alert akan otomatis tertutup dalam 5 detik jika tidak ada pilihan.")
+            .setMessage("Anda yakin ingin keluar dari aplikasi? Ini akan mengakhiri sesi ujian Anda.\n\n⏱️ Alert akan otomatis tertutup dalam 1 detik jika tidak ada pilihan.")
             .setPositiveButton("Ya, Keluar") { _, _ ->
                 // User memilih Ya
                 countdownRunnable?.let { countdownHandler.removeCallbacks(it) }
@@ -157,7 +157,7 @@ class MainActivity : AppCompatActivity() {
         }
         
         // Jalankan timer 5 detik
-        countdownHandler.postDelayed(countdownRunnable!!, 2500)
+        countdownHandler.postDelayed(countdownRunnable!!, 1000)
     }
 
     /**
