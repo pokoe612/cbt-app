@@ -50,10 +50,13 @@ class MainActivity : AppCompatActivity() {
         hideSystemUI()
 
         startKioskMode()
+
+        // cek apakah benar-benar disematkan
+        checkLockTaskActive()
     }
 
     /**
-     * Setup WebView untuk CBT
+     * Setup WebView CBT
      */
     private fun setupWebView() {
 
@@ -98,7 +101,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     /**
-     * Mode Kiosk (blok HOME dan RECENT)
+     * Aktifkan kiosk mode
      */
     private fun startKioskMode() {
 
@@ -123,6 +126,29 @@ class MainActivity : AppCompatActivity() {
     }
 
     /**
+     * Cek apakah aplikasi benar-benar disematkan
+     */
+    private fun checkLockTaskActive() {
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+
+            val state = devicePolicyManager.lockTaskModeState
+
+            if (state == DevicePolicyManager.LOCK_TASK_MODE_NONE) {
+
+                AlertDialog.Builder(this)
+                    .setTitle("Mode Ujian Belum Aktif")
+                    .setMessage("Aplikasi harus disematkan untuk memulai ujian.")
+                    .setCancelable(false)
+                    .setPositiveButton("Tutup Aplikasi") { _, _ ->
+                        finishAffinity()
+                    }
+                    .show()
+            }
+        }
+    }
+
+    /**
      * Fullscreen
      */
     private fun hideSystemUI() {
@@ -141,6 +167,13 @@ class MainActivity : AppCompatActivity() {
         if (hasFocus) {
             hideSystemUI()
         }
+    }
+
+    override fun onResume() {
+        super.onResume()
+
+        // jika siswa menolak sematkan -> aplikasi keluar
+        checkLockTaskActive()
     }
 
     /**
