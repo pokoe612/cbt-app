@@ -9,7 +9,6 @@ import android.os.Build
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
-import android.util.Log
 import android.view.KeyEvent
 import android.view.View
 import android.webkit.CookieManager
@@ -22,6 +21,9 @@ import androidx.appcompat.app.AppCompatActivity
 class MainActivity : AppCompatActivity() {
 
     private lateinit var webView: WebView
+    private lateinit var devicePolicyManager: DevicePolicyManager
+    private lateinit var adminComponent: ComponentName
+    
     private val mainHandler = Handler(Looper.getMainLooper())
     private val alertHandler = Handler(Looper.getMainLooper())
     
@@ -32,12 +34,19 @@ class MainActivity : AppCompatActivity() {
     private var isExiting = false
     private var isAlertShowing = false
     private var isLockTaskExiting = false
+    private var isLockTaskActive = false // Lacak status lock task
+    
     private var alertTimerRunnable: Runnable? = null
     private var lockTaskExitRunnable: Runnable? = null
+    private var lockTaskStabilizerRunnable: Runnable? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
+        
+        // Inisialisasi DevicePolicyManager
+        devicePolicyManager = getSystemService(Context.DEVICE_POLICY_SERVICE) as DevicePolicyManager
+        adminComponent = ComponentName(this, AdminReceiver::class.java)
         
         // Setup WebView
         webView = findViewById(R.id.webView)
@@ -52,30 +61,24 @@ class MainActivity : AppCompatActivity() {
         webView.webViewClient = object : WebViewClient() {
             override fun onPageFinished(view: WebView?, url: String?) {
                 super.onPageFinished(view, url)
-                if (!isExiting && !isLockTaskExiting) {
-                    enableLockTask()
-                }
+                stabilkanLockTask()
             }
         }
         
         webView.loadUrl(examUrl)
-        enableLockTask()
+        stabilkanLockTask()
     }
 
     override fun onKeyDown(keyCode: Int, event: KeyEvent?): Boolean {
         when (keyCode) {
             KeyEvent.KEYCODE_BACK -> {
-                // LANGSUNG tampilkan alert, tanpa navigasi halaman
                 showExitConfirmation()
                 return true
             }
             KeyEvent.KEYCODE_HOME,
             KeyEvent.KEYCODE_APP_SWITCH -> {
-                Toast.makeText(this, "⚠️ Mode Ujian Aktif", Toast.LENGTH_SHORT).show()
-                // Pastikan lock task tetap aktif
-                mainHandler.postDelayed({
-                    enableLockTask()
-                }, 100)
+                // Langsung stabilkan tanpa toast
+                stabilkanLockTask()
                 return true
             }
         }
@@ -85,80 +88,102 @@ class MainActivity : AppCompatActivity() {
     override fun onWindowFocusChanged(hasFocus: Boolean) {
         super.onWindowFocusChanged(hasFocus)
         
-        if (!hasFocus && !isExiting && !isLockTaskExiting) {
-            // Deteksi user mencoba keluar dari lock task
+        if (!hasFocus && !isExiting && !isAlertShowing && !isLockTaskExiting) {
             detectLockTaskExit()
         }
         
         if (hasFocus && isLockTaskExiting) {
-            // Jika kembali ke aplikasi sebelum 3 detik, batalkan logout
             cancelLockTaskExit()
+        }
+        
+        // Stabilkan lock task setiap kali fokus berubah
+        if (hasFocus && !isExiting && !isAlertShowing) {
+            stabilkanLockTask()
         }
     }
 
     /**
-     * Deteksi user mencoba keluar dari lock task
-     * Jika iya, mulai timer 3 detik untuk logout otomatis
+     * Stabilkan lock task dengan pengecekan berkala
      */
-    private fun detectLockTaskExit() {
-        isLockTaskExiting = true
+    private fun stabilkanLockTask() {
+        if (isExiting || isAlertShowing) return
         
-        // Batalkan timer sebelumnya jika ada
-        lockTaskExitRunnable?.let { mainHandler.removeCallbacks(it) }
+        // Batalkan stabilizer sebelumnya
+        lockTaskStabilizerRunnable?.let { mainHandler.removeCallbacks(it) }
         
-        // Tampilkan peringatan
-        Toast.makeText(this, "⚠️ PERINGATAN: Akan logout otomatis dalam 3 detik jika tetap keluar!", Toast.LENGTH_LONG).show()
-        
-        // Timer 3 detik untuk logout
-        lockTaskExitRunnable = Runnable {
-            if (isLockTaskExiting) {
-                // User benar-benar keluar, lakukan logout
-                performForceLogout("Keluar paksa dari lock task")
+        // Aktifkan lock task jika belum aktif
+        if (!isLockTaskActive && Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+            try {
+                startLockTask()
+                hideSystemUI()
+                isLockTaskActive = true
+            } catch (e: Exception) {
+                e.printStackTrace()
             }
         }
         
+        // Cek secara berkala setiap 2 detik
+        lockTaskStabilizerRunnable = Runnable {
+            if (!isExiting && !isAlertShowing && !isLockTaskExiting) {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+                    try {
+                        // Cek apakah lock task masih aktif
+                        // Jika tidak, aktifkan lagi
+                        startLockTask()
+                        hideSystemUI()
+                        isLockTaskActive = true
+                    } catch (e: Exception) {
+                        isLockTaskActive = false
+                    }
+                }
+                // Jadwalkan pengecekan berikutnya
+                mainHandler.postDelayed(lockTaskStabilizerRunnable!!, 2000)
+            }
+        }
+        
+        // Mulai pengecekan berkala
+        mainHandler.postDelayed(lockTaskStabilizerRunnable!!, 2000)
+    }
+
+    private fun detectLockTaskExit() {
+        isLockTaskExiting = true
+        isLockTaskActive = false
+        lockTaskExitRunnable?.let { mainHandler.removeCallbacks(it) }
+        
+        Toast.makeText(this, "⚠️ Akan logout dalam 3 detik", Toast.LENGTH_SHORT).show()
+        
+        lockTaskExitRunnable = Runnable {
+            if (isLockTaskExiting) {
+                performForceLogout()
+            }
+        }
         mainHandler.postDelayed(lockTaskExitRunnable!!, 3000)
     }
 
-    /**
-     * Batalkan proses logout jika user kembali ke aplikasi
-     */
     private fun cancelLockTaskExit() {
         if (isLockTaskExiting) {
             isLockTaskExiting = false
             lockTaskExitRunnable?.let { mainHandler.removeCallbacks(it) }
-            Toast.makeText(this, "✅ Kembali ke ujian, logout dibatalkan", Toast.LENGTH_SHORT).show()
-            
-            // Aktifkan lock task kembali
-            if (!isExiting) {
-                enableLockTask()
-            }
+            stabilkanLockTask()
         }
     }
 
-    /**
-     * Force logout ketika user memaksa keluar dari lock task
-     */
-    private fun performForceLogout(reason: String) {
+    private fun performForceLogout() {
         if (isExiting) return
         
         isExiting = true
         isLockTaskExiting = false
         isAlertShowing = false
+        isLockTaskActive = false
         
-        Log.d("LockTask", "Force logout karena: $reason")
+        Toast.makeText(this, "⚠️ Logout otomatis", Toast.LENGTH_SHORT).show()
         
-        Toast.makeText(this, "⚠️ Logout otomatis karena mencoba keluar dari aplikasi!", Toast.LENGTH_LONG).show()
-        
-        // Matikan lock task
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
             stopLockTask()
         }
         
-        // Load URL logout
         webView.loadUrl(logoutUrl)
         
-        // Tunggu sebentar lalu tutup aplikasi
         mainHandler.postDelayed({
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
                 webView.clearHistory()
@@ -169,19 +194,14 @@ class MainActivity : AppCompatActivity() {
         }, 1500)
     }
 
-    /**
-     * Menampilkan konfirmasi keluar selama 1 DETIK
-     * Tombol BACK langsung memanggil fungsi ini
-     */
     private fun showExitConfirmation() {
         if (isAlertShowing || isLockTaskExiting) return
         
         isAlertShowing = true
+        isLockTaskActive = false
         
-        // 🔒 LOCK TASK TETAP AKTIF - TIDAK DIMATIKAN
-        // if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
-        //     stopLockTask()  // <-- INI DIHAPUS
-        // }
+        // Matikan stabilizer sementara
+        lockTaskStabilizerRunnable?.let { mainHandler.removeCallbacks(it) }
         
         alertTimerRunnable?.let { alertHandler.removeCallbacks(it) }
         
@@ -196,34 +216,32 @@ class MainActivity : AppCompatActivity() {
             .setNegativeButton("Batal") { _, _ ->
                 alertTimerRunnable?.let { alertHandler.removeCallbacks(it) }
                 isAlertShowing = false
-                Toast.makeText(this, "✅ Ujian dilanjutkan", Toast.LENGTH_SHORT).show()
-                // Lock task sudah aktif, tidak perlu reactivate
+                stabilkanLockTask() // Aktifkan kembali stabilizer
             }
             .setCancelable(false)
             .create()
         
         dialog.show()
         
-        // Timer 1 DETIK untuk auto close
         alertTimerRunnable = Runnable {
             if (dialog.isShowing) {
                 dialog.dismiss()
                 isAlertShowing = false
-                Toast.makeText(this, "⏱️ Waktu habis, ujian dilanjutkan", Toast.LENGTH_SHORT).show()
-                // Lock task sudah aktif, tidak perlu reactivate
+                stabilkanLockTask() // Aktifkan kembali stabilizer
             }
         }
         
         alertHandler.postDelayed(alertTimerRunnable!!, 1000)
     }
 
-    /**
-     * Proses logout normal (dari alert)
-     */
     private fun performLogout() {
         isExiting = true
         isAlertShowing = false
         isLockTaskExiting = false
+        isLockTaskActive = false
+        
+        // Matikan semua stabilizer
+        lockTaskStabilizerRunnable?.let { mainHandler.removeCallbacks(it) }
         
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
             stopLockTask()
@@ -241,24 +259,10 @@ class MainActivity : AppCompatActivity() {
         }, 1500)
     }
 
-    /**
-     * Mengaktifkan lock task dan menyembunyikan UI
-     */
     private fun enableLockTask() {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP && !isExiting && !isLockTaskExiting) {
-            try {
-                startLockTask()
-                hideSystemUI()
-                Log.d("LockTask", "Lock task aktif")
-            } catch (e: Exception) {
-                e.printStackTrace()
-            }
-        }
+        stabilkanLockTask() // Panggil stabilizer
     }
     
-    /**
-     * Menyembunyikan navigation bar dan status bar
-     */
     private fun hideSystemUI() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.KITKAT) {
             window.decorView.systemUiVisibility = (
