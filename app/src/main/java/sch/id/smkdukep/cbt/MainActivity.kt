@@ -1,5 +1,6 @@
 package sch.id.smkdukep.cbt
 
+import android.app.ActivityManager
 import android.app.AlertDialog
 import android.app.admin.DevicePolicyManager
 import android.content.ComponentName
@@ -22,13 +23,14 @@ class MainActivity : AppCompatActivity() {
 
     private val examUrl = "https://smkdukep.sch.id/cbt/login"
     private val logoutUrl = "https://smkdukep.sch.id/cbt/logout"
+    private val allowedDomain = "smkdukep.sch.id"
 
     private var isExiting = false
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        // Blok Screenshot
+        // 🔒 Blok Screenshot
         window.setFlags(
             WindowManager.LayoutParams.FLAG_SECURE,
             WindowManager.LayoutParams.FLAG_SECURE
@@ -51,7 +53,6 @@ class MainActivity : AppCompatActivity() {
 
         startKioskMode()
 
-        // cek apakah benar-benar disematkan
         checkLockTaskActive()
     }
 
@@ -78,7 +79,7 @@ class MainActivity : AppCompatActivity() {
             displayZoomControls = false
         }
 
-        // Blok copy soal
+        // 🔒 Blok copy soal
         webView.setOnLongClickListener { true }
         webView.isLongClickable = false
 
@@ -87,6 +88,11 @@ class MainActivity : AppCompatActivity() {
             override fun shouldOverrideUrlLoading(view: WebView?, url: String?): Boolean {
 
                 if (url == null) return false
+
+                // 🔒 hanya domain sekolah
+                if (!url.contains(allowedDomain)) {
+                    return true
+                }
 
                 if (url.contains("logout")) {
                     performLogout()
@@ -101,7 +107,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     /**
-     * Aktifkan kiosk mode
+     * 🔒 Aktifkan kiosk mode
      */
     private fun startKioskMode() {
 
@@ -126,15 +132,16 @@ class MainActivity : AppCompatActivity() {
     }
 
     /**
-     * Cek apakah aplikasi benar-benar disematkan
+     * 🔒 Cek apakah aplikasi benar-benar disematkan
      */
     private fun checkLockTaskActive() {
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
 
-            val state = devicePolicyManager.lockTaskModeState
+            val activityManager =
+                getSystemService(Context.ACTIVITY_SERVICE) as ActivityManager
 
-            if (state == DevicePolicyManager.LOCK_TASK_MODE_NONE) {
+            if (activityManager.lockTaskModeState == ActivityManager.LOCK_TASK_MODE_NONE) {
 
                 AlertDialog.Builder(this)
                     .setTitle("Mode Ujian Belum Aktif")
@@ -149,7 +156,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     /**
-     * Fullscreen
+     * 🔒 Fullscreen
      */
     private fun hideSystemUI() {
 
@@ -172,7 +179,7 @@ class MainActivity : AppCompatActivity() {
     override fun onResume() {
         super.onResume()
 
-        // jika siswa menolak sematkan -> aplikasi keluar
+        // jika siswa menolak sematkan → aplikasi keluar
         checkLockTaskActive()
     }
 
