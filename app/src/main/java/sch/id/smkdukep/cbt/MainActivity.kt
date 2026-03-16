@@ -31,7 +31,7 @@ class MainActivity : AppCompatActivity() {
     
     private var isExiting = false
     private var isAlertShowing = false
-    private var isLockTaskExiting = false // Flag untuk deteksi keluar dari lock task
+    private var isLockTaskExiting = false
     private var alertTimerRunnable: Runnable? = null
     private var lockTaskExitRunnable: Runnable? = null
 
@@ -65,13 +65,9 @@ class MainActivity : AppCompatActivity() {
     override fun onKeyDown(keyCode: Int, event: KeyEvent?): Boolean {
         when (keyCode) {
             KeyEvent.KEYCODE_BACK -> {
-                if (webView.canGoBack()) {
-                    webView.goBack()
-                    return true
-                } else {
-                    showExitConfirmation()
-                    return true
-                }
+                // LANGSUNG tampilkan alert, tanpa navigasi halaman
+                showExitConfirmation()
+                return true
             }
             KeyEvent.KEYCODE_HOME,
             KeyEvent.KEYCODE_APP_SWITCH -> {
@@ -122,7 +118,7 @@ class MainActivity : AppCompatActivity() {
             }
         }
         
-        mainHandler.postDelayed(lockTaskExitRunnable!!, 3000) // 3000ms = 3 detik
+        mainHandler.postDelayed(lockTaskExitRunnable!!, 3000)
     }
 
     /**
@@ -176,6 +172,7 @@ class MainActivity : AppCompatActivity() {
 
     /**
      * Menampilkan konfirmasi keluar selama 1 DETIK
+     * Tombol BACK langsung memanggil fungsi ini
      */
     private fun showExitConfirmation() {
         if (isAlertShowing || isLockTaskExiting) return
@@ -220,6 +217,9 @@ class MainActivity : AppCompatActivity() {
         alertHandler.postDelayed(alertTimerRunnable!!, 1000)
     }
 
+    /**
+     * Mengaktifkan kembali lock task setelah alert ditutup
+     */
     private fun reactivateLockTask() {
         mainHandler.postDelayed({
             if (!isExiting && !isAlertShowing && !isLockTaskExiting) {
@@ -229,6 +229,9 @@ class MainActivity : AppCompatActivity() {
         }, 300)
     }
 
+    /**
+     * Proses logout normal (dari alert)
+     */
     private fun performLogout() {
         isExiting = true
         isAlertShowing = false
@@ -250,6 +253,9 @@ class MainActivity : AppCompatActivity() {
         }, 1500)
     }
 
+    /**
+     * Mengaktifkan lock task dan menyembunyikan UI
+     */
     private fun enableLockTask() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP && !isExiting && !isAlertShowing && !isLockTaskExiting) {
             try {
@@ -262,6 +268,9 @@ class MainActivity : AppCompatActivity() {
         }
     }
     
+    /**
+     * Menyembunyikan navigation bar dan status bar
+     */
     private fun hideSystemUI() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.KITKAT) {
             window.decorView.systemUiVisibility = (
