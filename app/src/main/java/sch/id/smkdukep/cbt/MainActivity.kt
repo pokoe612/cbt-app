@@ -4,7 +4,6 @@ import android.app.AlertDialog
 import android.app.admin.DevicePolicyManager
 import android.content.ComponentName
 import android.content.Context
-import android.content.Intent
 import android.os.Build
 import android.os.Bundle
 import android.os.Handler
@@ -33,11 +32,8 @@ class MainActivity : AppCompatActivity() {
     
     private var isExiting = false
     private var isAlertShowing = false
-    private var isLockTaskExiting = false
-    private var isLockTaskActive = false // Lacak status lock task
-    
+    private var isLockTaskActive = false
     private var alertTimerRunnable: Runnable? = null
-    private var lockTaskExitRunnable: Runnable? = null
     private var lockTaskStabilizerRunnable: Runnable? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -77,7 +73,7 @@ class MainActivity : AppCompatActivity() {
             }
             KeyEvent.KEYCODE_HOME,
             KeyEvent.KEYCODE_APP_SWITCH -> {
-                // Langsung stabilkan tanpa toast
+                // Stabilkan lock task tanpa toast
                 stabilkanLockTask()
                 return true
             }
@@ -87,14 +83,6 @@ class MainActivity : AppCompatActivity() {
 
     override fun onWindowFocusChanged(hasFocus: Boolean) {
         super.onWindowFocusChanged(hasFocus)
-        
-        if (!hasFocus && !isExiting && !isAlertShowing && !isLockTaskExiting) {
-            detectLockTaskExit()
-        }
-        
-        if (hasFocus && isLockTaskExiting) {
-            cancelLockTaskExit()
-        }
         
         // Stabilkan lock task setiap kali fokus berubah
         if (hasFocus && !isExiting && !isAlertShowing) {
@@ -124,11 +112,9 @@ class MainActivity : AppCompatActivity() {
         
         // Cek secara berkala setiap 2 detik
         lockTaskStabilizerRunnable = Runnable {
-            if (!isExiting && !isAlertShowing && !isLockTaskExiting) {
+            if (!isExiting && !isAlertShowing) {
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
                     try {
-                        // Cek apakah lock task masih aktif
-                        // Jika tidak, aktifkan lagi
                         startLockTask()
                         hideSystemUI()
                         isLockTaskActive = true
@@ -145,57 +131,11 @@ class MainActivity : AppCompatActivity() {
         mainHandler.postDelayed(lockTaskStabilizerRunnable!!, 2000)
     }
 
-    private fun detectLockTaskExit() {
-        isLockTaskExiting = true
-        isLockTaskActive = false
-        lockTaskExitRunnable?.let { mainHandler.removeCallbacks(it) }
-        
-        Toast.makeText(this, "⚠️ Akan logout dalam 3 detik", Toast.LENGTH_SHORT).show()
-        
-        lockTaskExitRunnable = Runnable {
-            if (isLockTaskExiting) {
-                performForceLogout()
-            }
-        }
-        mainHandler.postDelayed(lockTaskExitRunnable!!, 3000)
-    }
-
-    private fun cancelLockTaskExit() {
-        if (isLockTaskExiting) {
-            isLockTaskExiting = false
-            lockTaskExitRunnable?.let { mainHandler.removeCallbacks(it) }
-            stabilkanLockTask()
-        }
-    }
-
-    private fun performForceLogout() {
-        if (isExiting) return
-        
-        isExiting = true
-        isLockTaskExiting = false
-        isAlertShowing = false
-        isLockTaskActive = false
-        
-        Toast.makeText(this, "⚠️ Logout otomatis", Toast.LENGTH_SHORT).show()
-        
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
-            stopLockTask()
-        }
-        
-        webView.loadUrl(logoutUrl)
-        
-        mainHandler.postDelayed({
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
-                webView.clearHistory()
-                webView.clearCache(true)
-                CookieManager.getInstance().removeAllCookies(null)
-            }
-            finishAffinity()
-        }, 1500)
-    }
-
+    /**
+     * Menampilkan konfirmasi keluar selama 1 DETIK
+     */
     private fun showExitConfirmation() {
-        if (isAlertShowing || isLockTaskExiting) return
+        if (isAlertShowing) return
         
         isAlertShowing = true
         isLockTaskActive = false
@@ -234,10 +174,12 @@ class MainActivity : AppCompatActivity() {
         alertHandler.postDelayed(alertTimerRunnable!!, 1000)
     }
 
+    /**
+     * Proses logout
+     */
     private fun performLogout() {
         isExiting = true
         isAlertShowing = false
-        isLockTaskExiting = false
         isLockTaskActive = false
         
         // Matikan semua stabilizer
@@ -257,10 +199,6 @@ class MainActivity : AppCompatActivity() {
             }
             finishAffinity()
         }, 1500)
-    }
-
-    private fun enableLockTask() {
-        stabilkanLockTask() // Panggil stabilizer
     }
     
     private fun hideSystemUI() {
