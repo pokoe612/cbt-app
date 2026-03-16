@@ -52,7 +52,7 @@ class MainActivity : AppCompatActivity() {
         webView.webViewClient = object : WebViewClient() {
             override fun onPageFinished(view: WebView?, url: String?) {
                 super.onPageFinished(view, url)
-                if (!isAlertShowing && !isExiting && !isLockTaskExiting) {
+                if (!isExiting && !isLockTaskExiting) {
                     enableLockTask()
                 }
             }
@@ -71,12 +71,11 @@ class MainActivity : AppCompatActivity() {
             }
             KeyEvent.KEYCODE_HOME,
             KeyEvent.KEYCODE_APP_SWITCH -> {
-                if (!isAlertShowing && !isLockTaskExiting) {
-                    Toast.makeText(this, "⚠️ Mode Ujian Aktif", Toast.LENGTH_SHORT).show()
-                    mainHandler.postDelayed({
-                        enableLockTask()
-                    }, 100)
-                }
+                Toast.makeText(this, "⚠️ Mode Ujian Aktif", Toast.LENGTH_SHORT).show()
+                // Pastikan lock task tetap aktif
+                mainHandler.postDelayed({
+                    enableLockTask()
+                }, 100)
                 return true
             }
         }
@@ -86,7 +85,7 @@ class MainActivity : AppCompatActivity() {
     override fun onWindowFocusChanged(hasFocus: Boolean) {
         super.onWindowFocusChanged(hasFocus)
         
-        if (!hasFocus && !isExiting && !isAlertShowing && !isLockTaskExiting) {
+        if (!hasFocus && !isExiting && !isLockTaskExiting) {
             // Deteksi user mencoba keluar dari lock task
             detectLockTaskExit()
         }
@@ -131,7 +130,7 @@ class MainActivity : AppCompatActivity() {
             Toast.makeText(this, "✅ Kembali ke ujian, logout dibatalkan", Toast.LENGTH_SHORT).show()
             
             // Aktifkan lock task kembali
-            if (!isExiting && !isAlertShowing) {
+            if (!isExiting) {
                 enableLockTask()
             }
         }
@@ -179,9 +178,10 @@ class MainActivity : AppCompatActivity() {
         
         isAlertShowing = true
         
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
-            stopLockTask()
-        }
+        // 🔒 LOCK TASK TETAP AKTIF - TIDAK DIMATIKAN
+        // if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+        //     stopLockTask()  // <-- INI DIHAPUS
+        // }
         
         alertTimerRunnable?.let { alertHandler.removeCallbacks(it) }
         
@@ -197,7 +197,7 @@ class MainActivity : AppCompatActivity() {
                 alertTimerRunnable?.let { alertHandler.removeCallbacks(it) }
                 isAlertShowing = false
                 Toast.makeText(this, "✅ Ujian dilanjutkan", Toast.LENGTH_SHORT).show()
-                reactivateLockTask()
+                // Lock task sudah aktif, tidak perlu reactivate
             }
             .setCancelable(false)
             .create()
@@ -210,23 +210,11 @@ class MainActivity : AppCompatActivity() {
                 dialog.dismiss()
                 isAlertShowing = false
                 Toast.makeText(this, "⏱️ Waktu habis, ujian dilanjutkan", Toast.LENGTH_SHORT).show()
-                reactivateLockTask()
+                // Lock task sudah aktif, tidak perlu reactivate
             }
         }
         
         alertHandler.postDelayed(alertTimerRunnable!!, 1000)
-    }
-
-    /**
-     * Mengaktifkan kembali lock task setelah alert ditutup
-     */
-    private fun reactivateLockTask() {
-        mainHandler.postDelayed({
-            if (!isExiting && !isAlertShowing && !isLockTaskExiting) {
-                enableLockTask()
-                Log.d("LockTask", "Lock task diaktifkan kembali")
-            }
-        }, 300)
     }
 
     /**
@@ -257,7 +245,7 @@ class MainActivity : AppCompatActivity() {
      * Mengaktifkan lock task dan menyembunyikan UI
      */
     private fun enableLockTask() {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP && !isExiting && !isAlertShowing && !isLockTaskExiting) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP && !isExiting && !isLockTaskExiting) {
             try {
                 startLockTask()
                 hideSystemUI()
