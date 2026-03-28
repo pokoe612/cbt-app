@@ -147,7 +147,7 @@ class MainActivity : AppCompatActivity() {
                     .setTitle("Perhatian!")
                     .setMessage("Aplikasi harus disematkan untuk memulai ujian.")
                     .setCancelable(false)
-                    .setPositiveButton("Tutup") { _, _ ->
+                    .setPositiveButton("OK") { _, _ ->
                         finishAffinity()
                     }
                     .show()
