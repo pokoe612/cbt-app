@@ -144,7 +144,7 @@ class MainActivity : AppCompatActivity() {
             if (activityManager.lockTaskModeState == ActivityManager.LOCK_TASK_MODE_NONE) {
 
                 AlertDialog.Builder(this)
-                    .setTitle("Perhatian!")
+                    .setTitle("Peringatan!")
                     .setMessage("Aplikasi harus disematkan untuk memulai ujian.")
                     .setCancelable(false)
                     .setPositiveButton("OK") { _, _ ->
