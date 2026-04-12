@@ -30,13 +30,11 @@ class MainActivity : AppCompatActivity() {
     private val logoutUrl = "https://smkdukep.sch.id/cbt/logout"
     private val allowedDomain = "smkdukep.sch.id"
 
-    private var isExiting = false
     private val mainHandler = Handler(Looper.getMainLooper())
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        // 🔒 Blok Screenshot
         window.setFlags(
             WindowManager.LayoutParams.FLAG_SECURE,
             WindowManager.LayoutParams.FLAG_SECURE
@@ -53,9 +51,8 @@ class MainActivity : AppCompatActivity() {
 
         setupWebView()
 
-        // 🔥 DELAY agar koneksi benar-benar siap
+        // 🔥 Delay agar koneksi stabil
         mainHandler.postDelayed({
-
             Thread {
                 val isConnected = isInternetReallyAvailable()
 
@@ -66,9 +63,7 @@ class MainActivity : AppCompatActivity() {
                         showNoInternetPage()
                     }
                 }
-
             }.start()
-
         }, 1500)
 
         hideSystemUI()
@@ -77,7 +72,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     /**
-     * Cek koneksi jaringan (masih dipakai sebagai fallback)
+     * Cek jaringan (fallback)
      */
     private fun isNetworkAvailable(): Boolean {
         return try {
@@ -103,7 +98,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     /**
-     * 🔥 Cek internet REAL (lebih akurat)
+     * 🔥 Cek internet REAL
      */
     private fun isInternetReallyAvailable(): Boolean {
         return try {
@@ -116,64 +111,59 @@ class MainActivity : AppCompatActivity() {
     }
 
     /**
-     * Tampilkan halaman no internet
+     * Halaman offline
      */
     private fun showNoInternetPage() {
         val noInternetHtml = """
-            <html>
-            <head>
-                <meta name="viewport" content="width=device-width, initial-scale=1.0">
-                <style>
-                    * { margin: 0; padding: 0; box-sizing: border-box; }
-                    body {
-                        font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-                        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-                        display: flex;
-                        justify-content: center;
-                        align-items: center;
-                        height: 100vh;
-                        margin: 0;
-                    }
-                    .container {
-                        text-align: center;
-                        padding: 40px;
-                        background: white;
-                        border-radius: 20px;
-                        box-shadow: 0 20px 60px rgba(0,0,0,0.3);
-                        max-width: 90%;
-                        width: 350px;
-                    }
-                    .icon { font-size: 80px; margin-bottom: 20px; }
-                    h1 { color: #333; margin-bottom: 10px; font-size: 24px; }
-                    p { color: #666; margin-bottom: 20px; line-height: 1.6; }
-                    button {
-                        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-                        color: white;
-                        border: none;
-                        padding: 12px 30px;
-                        font-size: 16px;
-                        border-radius: 30px;
-                        cursor: pointer;
-                    }
-                </style>
-            </head>
-            <body>
-                <div class="container">
-                    <div class="icon">🌐</div>
-                    <h1>Tidak Ada Koneksi Internet</h1>
-                    <p>Periksa kembali koneksi internet Anda dan pastikan Anda terhubung ke jaringan.</p>
-                    <button onclick="location.reload()">Coba Lagi</button>
-                </div>
-            </body>
-            </html>
-        """.trimIndent()
+<html>
+<head>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<style>
+* { margin:0; padding:0; box-sizing:border-box; }
+body {
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    background:#ffffff;
+    display:flex;
+    justify-content:center;
+    align-items:center;
+    height:100vh;
+}
+.container {
+    text-align:center;
+    padding:40px;
+    border-radius:20px;
+    box-shadow:0 10px 30px rgba(0,0,0,0.1);
+    width:350px;
+}
+.icon { font-size:70px; margin-bottom:20px; }
+h1 { color:#333; margin-bottom:10px; font-size:22px; }
+p { color:#666; margin-bottom:20px; }
+button {
+    background:#333;
+    color:#fff;
+    border:none;
+    padding:12px 30px;
+    border-radius:25px;
+}
+</style>
+</head>
+<body>
+<div class="container">
+<div class="icon">🌐</div>
+<h1>Tidak Ada Koneksi Internet</h1>
+<p>Periksa kembali koneksi internet Anda.</p>
+<button onclick="Android.logout()">Lepas sematan</button>
+</div>
+</body>
+</html>
+""".trimIndent()
 
         webView.loadDataWithBaseURL(null, noInternetHtml, "text/html", "UTF-8", null)
         Toast.makeText(this, "⚠️ Tidak ada koneksi internet", Toast.LENGTH_LONG).show()
     }
 
     /**
-     * Setup WebView CBT
+     * Setup WebView
      */
     private fun setupWebView() {
 
@@ -190,8 +180,17 @@ class MainActivity : AppCompatActivity() {
             displayZoomControls = false
         }
 
-        webView.setOnLongClickListener { true }
         webView.isLongClickable = false
+        webView.setOnLongClickListener { true }
+
+        webView.addJavascriptInterface(object {
+            @android.webkit.JavascriptInterface
+            fun logout() {
+                runOnUiThread {
+                    performLogout()
+                }
+            }
+        }, "Android")
 
         webView.webViewClient = object : WebViewClient() {
 
@@ -199,9 +198,7 @@ class MainActivity : AppCompatActivity() {
 
                 if (url == null) return false
 
-                if (!url.contains(allowedDomain)) {
-                    return true
-                }
+                if (!url.contains(allowedDomain)) return true
 
                 if (url.contains("logout")) {
                     performLogout()
@@ -216,11 +213,7 @@ class MainActivity : AppCompatActivity() {
                 super.onPageFinished(view, url)
 
                 view?.loadUrl(
-                    "javascript:(function() { " +
-                            "var errorElements = document.querySelectorAll('[class*=\"error\"], [id*=\"error\"]'); " +
-                            "for(var i=0; i<errorElements.length; i++) { " +
-                            "if(errorElements[i].innerText.indexOf('net::ERR') > -1) { " +
-                            "errorElements[i].style.display='none'; } } })()"
+                    "javascript:(function(){var e=document.querySelectorAll('[class*=error],[id*=error]');for(var i=0;i<e.length;i++){if(e[i].innerText.indexOf('net::ERR')>-1){e[i].style.display='none';}}})()"
                 )
             }
 
@@ -229,8 +222,6 @@ class MainActivity : AppCompatActivity() {
                 request: android.webkit.WebResourceRequest?,
                 error: android.webkit.WebResourceError?
             ) {
-                super.onReceivedError(view, request, error)
-
                 if (request?.isForMainFrame == true) {
                     showNoInternetPage()
                 }
@@ -256,19 +247,15 @@ class MainActivity : AppCompatActivity() {
 
     private fun checkLockTaskActive() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-
             val activityManager =
                 getSystemService(Context.ACTIVITY_SERVICE) as ActivityManager
 
             if (activityManager.lockTaskModeState == ActivityManager.LOCK_TASK_MODE_NONE) {
-
                 AlertDialog.Builder(this)
                     .setTitle("Peringatan!")
                     .setMessage("Aplikasi harus disematkan untuk memulai ujian.")
                     .setCancelable(false)
-                    .setPositiveButton("OK") { _, _ ->
-                        finishAffinity()
-                    }
+                    .setPositiveButton("OK") { _, _ -> finishAffinity() }
                     .show()
             }
         }
@@ -281,11 +268,6 @@ class MainActivity : AppCompatActivity() {
                     View.SYSTEM_UI_FLAG_HIDE_NAVIGATION or
                     View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION or
                     View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN
-    }
-
-    override fun onWindowFocusChanged(hasFocus: Boolean) {
-        super.onWindowFocusChanged(hasFocus)
-        if (hasFocus) hideSystemUI()
     }
 
     override fun onResume() {
@@ -309,25 +291,16 @@ class MainActivity : AppCompatActivity() {
     }
 
     override fun onBackPressed() {
-        showExitConfirmation()
-    }
-
-    private fun showExitConfirmation() {
-
         AlertDialog.Builder(this)
             .setTitle("Konfirmasi Keluar")
             .setMessage("Apakah Anda yakin ingin keluar dari ujian?")
-            .setPositiveButton("Ya") { _, _ ->
-                performLogout()
-            }
+            .setPositiveButton("Ya") { _, _ -> performLogout() }
             .setNegativeButton("Batal", null)
             .setCancelable(false)
             .show()
     }
 
     private fun performLogout() {
-
-        isExiting = true
 
         webView.loadUrl(logoutUrl)
 
