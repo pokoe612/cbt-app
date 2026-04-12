@@ -9,8 +9,6 @@ import android.net.ConnectivityManager
 import android.net.NetworkCapabilities
 import android.os.Build
 import android.os.Bundle
-import android.os.Handler
-import android.os.Looper
 import android.view.View
 import android.view.WindowManager
 import android.webkit.CookieManager
@@ -31,7 +29,7 @@ class MainActivity : AppCompatActivity() {
     private val allowedDomain = "smkdukep.sch.id"
 
     private var isExiting = false
-    private var isOfflineMode = false
+    private var hasShownOffline = false
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -55,10 +53,8 @@ class MainActivity : AppCompatActivity() {
 
         // CEK INTERNET
         if (isNetworkAvailable()) {
-            isOfflineMode = false
             webView.loadUrl(examUrl)
         } else {
-            isOfflineMode = true
             showNoInternetPage()
         }
 
@@ -87,8 +83,7 @@ class MainActivity : AppCompatActivity() {
                 return networkInfo != null && networkInfo.isConnected
             }
         } catch (e: Exception) {
-            e.printStackTrace()
-            return true
+            return false
         }
     }
 
@@ -96,7 +91,8 @@ class MainActivity : AppCompatActivity() {
      * Tampilkan halaman no internet
      */
     private fun showNoInternetPage() {
-        isOfflineMode = true
+        hasShownOffline = true
+        
         val noInternetHtml = """
             <html>
             <head>
@@ -140,13 +136,14 @@ class MainActivity : AppCompatActivity() {
                     <div class="icon">🌐</div>
                     <h1>Tidak Ada Koneksi Internet</h1>
                     <p>Periksa kembali koneksi internet Anda dan pastikan Anda terhubung ke jaringan.</p>
-                    <button onclick="location.reload()">Coba Lagi</button>
+                    <button onclick="window.location.reload()">Coba Lagi</button>
                 </div>
             </body>
             </html>
         """.trimIndent()
         
         webView.loadDataWithBaseURL(null, noInternetHtml, "text/html", "UTF-8", null)
+        Toast.makeText(this, "⚠️ Tidak ada koneksi internet", Toast.LENGTH_LONG).show()
     }
 
     /**
@@ -159,21 +156,15 @@ class MainActivity : AppCompatActivity() {
             javaScriptEnabled = true
             domStorageEnabled = true
             databaseEnabled = true
-
             allowFileAccess = true
-
             useWideViewPort = true
             loadWithOverviewMode = true
-
-            // 🔥 PENTING: Gunakan LOAD_DEFAULT agar CSS/JS terload dengan benar
             cacheMode = WebSettings.LOAD_DEFAULT
-
             setSupportZoom(false)
             builtInZoomControls = false
             displayZoomControls = false
         }
 
-        // 🔒 Blok copy soal
         webView.setOnLongClickListener { true }
         webView.isLongClickable = false
 
@@ -197,16 +188,6 @@ class MainActivity : AppCompatActivity() {
                 return true
             }
 
-            override fun onPageFinished(view: WebView?, url: String?) {
-                super.onPageFinished(view, url)
-                // Sembunyikan error jika ada
-                view?.loadUrl("javascript:(function() { " +
-                    "var elements = document.getElementsByTagName('*'); " +
-                    "for(var i=0; i<elements.length; i++) { " +
-                    "if(elements[i].innerHTML && elements[i].innerHTML.indexOf('net::ERR') > -1) { " +
-                    "elements[i].style.display='none'; } } })()")
-            }
-
             override fun onReceivedError(
                 view: WebView?,
                 errorCode: Int,
@@ -215,7 +196,7 @@ class MainActivity : AppCompatActivity() {
             ) {
                 super.onReceivedError(view, errorCode, description, failingUrl)
                 // Hanya tampilkan offline jika benar-benar tidak ada internet
-                if (!isNetworkAvailable() && failingUrl?.contains(allowedDomain) == true) {
+                if (!isNetworkAvailable() && !hasShownOffline) {
                     showNoInternetPage()
                 }
             }
@@ -297,26 +278,19 @@ class MainActivity : AppCompatActivity() {
 
         checkLockTaskActive()
         
-        // 🔥 CEK KONEKSI SAAT RESUME, TAPI JANGAN FORCE RELOAD
-        if (isNetworkAvailable() && isOfflineMode) {
-            isOfflineMode = false
+        // Cek koneksi saat resume
+        if (isNetworkAvailable() && hasShownOffline) {
+            hasShownOffline = false
             webView.loadUrl(examUrl)
-        } else if (!isNetworkAvailable() && !isOfflineMode) {
-            isOfflineMode = true
+        } else if (!isNetworkAvailable() && !hasShownOffline) {
             showNoInternetPage()
         }
     }
 
-    /**
-     * Tombol BACK
-     */
     override fun onBackPressed() {
         showExitConfirmation()
     }
 
-    /**
-     * Konfirmasi keluar
-     */
     private fun showExitConfirmation() {
 
         AlertDialog.Builder(this)
@@ -330,9 +304,6 @@ class MainActivity : AppCompatActivity() {
             .show()
     }
 
-    /**
-     * Logout CBT
-     */
     private fun performLogout() {
 
         isExiting = true
