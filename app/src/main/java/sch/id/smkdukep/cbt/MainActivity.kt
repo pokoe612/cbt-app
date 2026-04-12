@@ -7,8 +7,11 @@ import android.content.ComponentName
 import android.content.Context
 import android.net.ConnectivityManager
 import android.net.NetworkCapabilities
+import android.net.NetworkRequest
 import android.os.Build
 import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
 import android.view.View
 import android.view.WindowManager
 import android.webkit.CookieManager
@@ -30,6 +33,7 @@ class MainActivity : AppCompatActivity() {
 
     private var isExiting = false
     private var hasShownOffline = false
+    private val mainHandler = Handler(Looper.getMainLooper())
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -51,12 +55,14 @@ class MainActivity : AppCompatActivity() {
 
         setupWebView()
 
-        // CEK INTERNET
-        if (isNetworkAvailable()) {
-            webView.loadUrl(examUrl)
-        } else {
-            showNoInternetPage()
-        }
+        // 🔥 TUNDA LOAD 1 DETIK, BERI WAKTU KONEKSI SIAP
+        mainHandler.postDelayed({
+            if (isNetworkAvailable()) {
+                webView.loadUrl(examUrl)
+            } else {
+                showNoInternetPage()
+            }
+        }, 1000)
 
         hideSystemUI()
         startKioskMode()
@@ -64,11 +70,12 @@ class MainActivity : AppCompatActivity() {
     }
 
     /**
-     * Cek koneksi internet
+     * Cek koneksi internet - LEBIH AKURAT
      */
     private fun isNetworkAvailable(): Boolean {
         try {
             val connectivityManager = getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
+            
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
                 val network = connectivityManager.activeNetwork
                 val capabilities = connectivityManager.getNetworkCapabilities(network)
@@ -76,14 +83,14 @@ class MainActivity : AppCompatActivity() {
                     capabilities.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) ||
                     capabilities.hasTransport(NetworkCapabilities.TRANSPORT_CELLULAR) ||
                     capabilities.hasTransport(NetworkCapabilities.TRANSPORT_ETHERNET)
-                )
+                ) && capabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
             } else {
                 @Suppress("DEPRECATION")
                 val networkInfo = connectivityManager.activeNetworkInfo
-                return networkInfo != null && networkInfo.isConnected
+                return networkInfo != null && networkInfo.isConnected && networkInfo.isAvailable
             }
         } catch (e: Exception) {
-            return false
+            return true
         }
     }
 
@@ -196,7 +203,7 @@ class MainActivity : AppCompatActivity() {
             ) {
                 super.onReceivedError(view, errorCode, description, failingUrl)
                 // Hanya tampilkan offline jika benar-benar tidak ada internet
-                if (!isNetworkAvailable() && !hasShownOffline) {
+                if (!isNetworkAvailable() && !hasShownOffline && failingUrl?.contains(allowedDomain) == true) {
                     showNoInternetPage()
                 }
             }
@@ -279,12 +286,14 @@ class MainActivity : AppCompatActivity() {
         checkLockTaskActive()
         
         // Cek koneksi saat resume
-        if (isNetworkAvailable() && hasShownOffline) {
-            hasShownOffline = false
-            webView.loadUrl(examUrl)
-        } else if (!isNetworkAvailable() && !hasShownOffline) {
-            showNoInternetPage()
-        }
+        mainHandler.postDelayed({
+            if (isNetworkAvailable() && hasShownOffline) {
+                hasShownOffline = false
+                webView.loadUrl(examUrl)
+            } else if (!isNetworkAvailable() && !hasShownOffline) {
+                showNoInternetPage()
+            }
+        }, 500)
     }
 
     override fun onBackPressed() {
@@ -320,5 +329,10 @@ class MainActivity : AppCompatActivity() {
         }
 
         finishAffinity()
+    }
+
+    override fun onDestroy() {
+        super.onDestroy()
+        mainHandler.removeCallbacksAndMessages(null)
     }
 }
