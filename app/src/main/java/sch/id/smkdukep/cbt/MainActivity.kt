@@ -58,7 +58,9 @@ class MainActivity : AppCompatActivity() {
         checkInternetAndLoad()
 
         hideSystemUI()
+
         startKioskMode()
+
         checkLockTaskActive()
     }
 
@@ -96,60 +98,27 @@ class MainActivity : AppCompatActivity() {
     }
 
     /**
-     * Tampilkan halaman offline
+     * Tampilkan halaman offline dari file assets
      */
     private fun showNoInternetPage() {
-        val noInternetHtml = """
-            <html>
-            <head>
-                <meta name="viewport" content="width=device-width, initial-scale=1.0">
-                <style>
-                    * { margin: 0; padding: 0; box-sizing: border-box; }
-                    body {
-                        font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-                        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-                        display: flex;
-                        justify-content: center;
-                        align-items: center;
-                        height: 100vh;
-                        margin: 0;
-                    }
-                    .container {
-                        text-align: center;
-                        padding: 40px;
-                        background: white;
-                        border-radius: 20px;
-                        box-shadow: 0 20px 60px rgba(0,0,0,0.3);
-                        max-width: 90%;
-                        width: 350px;
-                    }
-                    .icon { font-size: 80px; margin-bottom: 20px; }
-                    h1 { color: #333; margin-bottom: 10px; font-size: 24px; }
-                    p { color: #666; margin-bottom: 20px; line-height: 1.6; }
-                    button {
-                        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-                        color: white;
-                        border: none;
-                        padding: 12px 30px;
-                        font-size: 16px;
-                        border-radius: 30px;
-                        cursor: pointer;
-                    }
-                </style>
-            </head>
-            <body>
-                <div class="container">
-                    <div class="icon">🌐</div>
-                    <h1>Tidak Ada Koneksi Internet</h1>
-                    <p>Periksa kembali koneksi internet Anda dan pastikan Anda terhubung ke jaringan.</p>
-                    <button onclick="location.reload()">Coba Lagi</button>
-                </div>
-            </body>
-            </html>
-        """.trimIndent()
-        
-        webView.loadDataWithBaseURL(null, noInternetHtml, "text/html", "UTF-8", null)
-        Toast.makeText(this, "⚠️ Tidak ada koneksi internet", Toast.LENGTH_LONG).show()
+        try {
+            // Load dari file assets
+            val noInternetUrl = "file:///android_asset/no_internet.html"
+            webView.loadUrl(noInternetUrl)
+            Toast.makeText(this, "⚠️ Tidak ada koneksi internet", Toast.LENGTH_LONG).show()
+        } catch (e: Exception) {
+            e.printStackTrace()
+            // Fallback jika file tidak ditemukan
+            webView.loadData(
+                "<html><body style='text-align:center;padding:50px;'>" +
+                "<h1>⚠️ Tidak Ada Koneksi Internet</h1>" +
+                "<p>Periksa kembali koneksi internet Anda</p>" +
+                "<button onclick='location.reload()'>Coba Lagi</button>" +
+                "</body></html>",
+                "text/html",
+                "UTF-8"
+            )
+        }
     }
 
     /**
@@ -162,10 +131,14 @@ class MainActivity : AppCompatActivity() {
             javaScriptEnabled = true
             domStorageEnabled = true
             databaseEnabled = true
+
             allowFileAccess = true
+
             useWideViewPort = true
             loadWithOverviewMode = true
+
             cacheMode = WebSettings.LOAD_DEFAULT
+
             setSupportZoom(false)
             builtInZoomControls = false
             displayZoomControls = false
@@ -192,6 +165,7 @@ class MainActivity : AppCompatActivity() {
                 }
 
                 view?.loadUrl(url)
+
                 return true
             }
 
@@ -277,7 +251,7 @@ class MainActivity : AppCompatActivity() {
 
         if (hasFocus) {
             hideSystemUI()
-            // Cek ulang koneksi saat kembali ke aplikasi
+            // Cek ulang koneksi saat aplikasi mendapat fokus
             if (!isOnline && isNetworkAvailable()) {
                 isOnline = true
                 webView.loadUrl(examUrl)
