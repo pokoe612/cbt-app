@@ -9,6 +9,8 @@ import android.net.ConnectivityManager
 import android.net.NetworkCapabilities
 import android.os.Build
 import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
 import android.view.View
 import android.view.WindowManager
 import android.webkit.CookieManager
@@ -29,6 +31,8 @@ class MainActivity : AppCompatActivity() {
     private val allowedDomain = "smkdukep.sch.id"
 
     private var isExiting = false
+    private var isFirstLoad = true
+    private val mainHandler = Handler(Looper.getMainLooper())
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -88,7 +92,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     /**
-     * Tampilkan halaman no internet (LANGSUNG, tanpa load URL)
+     * Tampilkan halaman no internet
      */
     private fun showNoInternetPage() {
         val noInternetHtml = """
@@ -134,20 +138,14 @@ class MainActivity : AppCompatActivity() {
                     <div class="icon">🌐</div>
                     <h1>Tidak Ada Koneksi Internet</h1>
                     <p>Periksa kembali koneksi internet Anda dan pastikan Anda terhubung ke jaringan.</p>
-                    <button onclick="checkConnection()">Coba Lagi</button>
+                    <button onclick="location.reload()">Coba Lagi</button>
                 </div>
-                <script>
-                    function checkConnection() {
-                        window.location.reload();
-                    }
-                </script>
             </body>
             </html>
         """.trimIndent()
         
-        // 🔥 LANGSUNG tampilkan HTML, tanpa load URL eksternal
+        // 🔥 LANGSUNG tampilkan HTML
         webView.loadDataWithBaseURL(null, noInternetHtml, "text/html", "UTF-8", null)
-        Toast.makeText(this, "⚠️ Tidak ada koneksi internet", Toast.LENGTH_LONG).show()
     }
 
     /**
@@ -183,12 +181,6 @@ class MainActivity : AppCompatActivity() {
 
                 if (url == null) return false
 
-                // 🔥 CEK INTERNET SEBELUM LOAD URL BARU
-                if (!isNetworkAvailable()) {
-                    showNoInternetPage()
-                    return true
-                }
-
                 // 🔒 hanya domain sekolah
                 if (!url.contains(allowedDomain)) {
                     return true
@@ -203,22 +195,15 @@ class MainActivity : AppCompatActivity() {
                 return true
             }
 
-            override fun onPageFinished(view: WebView?, url: String?) {
-                super.onPageFinished(view, url)
-                // Sembunyikan error default WebView
-                view?.loadUrl("javascript:document.body.innerHTML = document.body.innerHTML.replace('net::ERR_NAME_NOT_RESOLVED', '')")
-            }
-
-            // 🔥 TANGANI ERROR KONEKSI
+            // 🔥 Cegah error page default WebView
             override fun onReceivedError(
                 view: WebView?,
                 errorCode: Int,
                 description: String?,
                 failingUrl: String?
             ) {
-                super.onReceivedError(view, errorCode, description, failingUrl)
-                // Jika error karena tidak ada internet, tampilkan halaman offline
-                if (!isNetworkAvailable() || errorCode == ERROR_HOST_LOOKUP || errorCode == ERROR_CONNECT) {
+                // Jangan tampilkan error page default
+                if (!isNetworkAvailable() && failingUrl?.contains(allowedDomain) == true) {
                     showNoInternetPage()
                 }
             }
@@ -292,13 +277,6 @@ class MainActivity : AppCompatActivity() {
 
         if (hasFocus) {
             hideSystemUI()
-            // 🔥 CEK ULANG KONEKSI SAAT APLIKASI DAPAT FOKUS
-            if (!isNetworkAvailable()) {
-                showNoInternetPage()
-            } else {
-                // Jika sudah ada koneksi, reload URL
-                webView.loadUrl(examUrl)
-            }
         }
     }
 
@@ -308,8 +286,13 @@ class MainActivity : AppCompatActivity() {
         // jika siswa menolak sematkan → aplikasi keluar
         checkLockTaskActive()
         
-        // 🔥 CEK KONEKSI SAAT RESUME
-        if (!isNetworkAvailable()) {
+        // 🔥 Cek koneksi saat resume, reload jika perlu
+        if (isNetworkAvailable()) {
+            val currentUrl = webView.url
+            if (currentUrl != null && currentUrl.contains("no_internet")) {
+                webView.loadUrl(examUrl)
+            }
+        } else {
             showNoInternetPage()
         }
     }
@@ -318,15 +301,6 @@ class MainActivity : AppCompatActivity() {
      * Tombol BACK
      */
     override fun onBackPressed() {
-        // 🔥 JIKA OFFLINE, RELOAD UNTUK CEK KONEKSI
-        if (!isNetworkAvailable()) {
-            if (isNetworkAvailable()) {
-                webView.loadUrl(examUrl)
-            } else {
-                showNoInternetPage()
-            }
-            return
-        }
         showExitConfirmation()
     }
 
