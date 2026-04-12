@@ -31,8 +31,8 @@ class MainActivity : AppCompatActivity() {
     private val allowedDomain = "smkdukep.sch.id"
 
     private var isExiting = false
-    private var isOnline = true  // 🔥 TAMBAHAN: status koneksi
-    private val mainHandler = Handler(Looper.getMainLooper())  // 🔥 TAMBAHAN
+    private var isOnline = true
+    private val mainHandler = Handler(Looper.getMainLooper())
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -54,18 +54,16 @@ class MainActivity : AppCompatActivity() {
 
         setupWebView()
 
-        // 🔥 TAMBAHAN: Cek internet dulu sebelum load
+        // Cek internet sebelum load
         checkInternetAndLoad()
 
         hideSystemUI()
-
         startKioskMode()
-
         checkLockTaskActive()
     }
 
     /**
-     * 🔥 TAMBAHAN: Cek koneksi internet
+     * Cek koneksi internet
      */
     private fun isNetworkAvailable(): Boolean {
         val connectivityManager = getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
@@ -85,7 +83,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     /**
-     * 🔥 TAMBAHAN: Cek internet lalu load URL
+     * Cek internet lalu load URL
      */
     private fun checkInternetAndLoad() {
         if (isNetworkAvailable()) {
@@ -98,79 +96,56 @@ class MainActivity : AppCompatActivity() {
     }
 
     /**
-     * 🔥 TAMBAHAN: Tampilkan halaman no internet
+     * Tampilkan halaman offline
      */
     private fun showNoInternetPage() {
         val noInternetHtml = """
-           <!DOCTYPE html>
-<html lang="id">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Tidak Ada Koneksi</title>
-    <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
-        body {
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            background: white;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            height: 100vh;
-            margin: 0;
-            padding: 20px;
-        }
-        .container {
-            text-align: center;
-            padding: 40px 30px;
-            background: white;
-            border-radius: 20px;
-            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
-            max-width: 90%;
-            width: 350px;
-        }
-        .icon {
-            font-size: 70px;
-            margin-bottom: 20px;
-        }
-        h1 {
-            color: #333;
-            margin-bottom: 12px;
-            font-size: 24px;
-        }
-        p {
-            color: #666;
-            margin-bottom: 25px;
-            line-height: 1.5;
-        }
-        button {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white;
-            border: none;
-            padding: 12px 30px;
-            font-size: 16px;
-            border-radius: 30px;
-            cursor: pointer;
-            font-weight: 500;
-        }
-        button:hover {
-            opacity: 0.9;
-        }
-    </style>
-</head>
-<body>
-    <div class="container">
-        <div class="icon">🌐</div>
-        <h1>Tidak Ada Koneksi Internet</h1>
-        <p>Periksa kembali koneksi internet Anda dan pastikan Anda terhubung ke jaringan.</p>
-        <button onclick="location.reload()">Coba Lagi</button>
-    </div>
-</body>
-</html>
+            <html>
+            <head>
+                <meta name="viewport" content="width=device-width, initial-scale=1.0">
+                <style>
+                    * { margin: 0; padding: 0; box-sizing: border-box; }
+                    body {
+                        font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+                        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                        display: flex;
+                        justify-content: center;
+                        align-items: center;
+                        height: 100vh;
+                        margin: 0;
+                    }
+                    .container {
+                        text-align: center;
+                        padding: 40px;
+                        background: white;
+                        border-radius: 20px;
+                        box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+                        max-width: 90%;
+                        width: 350px;
+                    }
+                    .icon { font-size: 80px; margin-bottom: 20px; }
+                    h1 { color: #333; margin-bottom: 10px; font-size: 24px; }
+                    p { color: #666; margin-bottom: 20px; line-height: 1.6; }
+                    button {
+                        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                        color: white;
+                        border: none;
+                        padding: 12px 30px;
+                        font-size: 16px;
+                        border-radius: 30px;
+                        cursor: pointer;
+                    }
+                </style>
+            </head>
+            <body>
+                <div class="container">
+                    <div class="icon">🌐</div>
+                    <h1>Tidak Ada Koneksi Internet</h1>
+                    <p>Periksa kembali koneksi internet Anda dan pastikan Anda terhubung ke jaringan.</p>
+                    <button onclick="location.reload()">Coba Lagi</button>
+                </div>
+            </body>
+            </html>
         """.trimIndent()
         
         webView.loadDataWithBaseURL(null, noInternetHtml, "text/html", "UTF-8", null)
@@ -187,14 +162,10 @@ class MainActivity : AppCompatActivity() {
             javaScriptEnabled = true
             domStorageEnabled = true
             databaseEnabled = true
-
             allowFileAccess = true
-
             useWideViewPort = true
             loadWithOverviewMode = true
-
-            cacheMode = WebSettings.LOAD_DEFAULT  // 🔥 UBAH ke DEFAULT
-
+            cacheMode = WebSettings.LOAD_DEFAULT
             setSupportZoom(false)
             builtInZoomControls = false
             displayZoomControls = false
@@ -224,7 +195,7 @@ class MainActivity : AppCompatActivity() {
                 return true
             }
 
-            // 🔥 TAMBAHAN: Tangani error koneksi
+            // Tangani error koneksi
             override fun onReceivedError(
                 view: WebView?,
                 errorCode: Int,
@@ -232,18 +203,6 @@ class MainActivity : AppCompatActivity() {
                 failingUrl: String?
             ) {
                 super.onReceivedError(view, errorCode, description, failingUrl)
-                if (!isNetworkAvailable()) {
-                    showNoInternetPage()
-                }
-            }
-
-            @Deprecated("Deprecated")
-            override fun onReceivedError(
-                view: WebView?,
-                request: WebResourceRequest?,
-                error: WebResourceError?
-            ) {
-                super.onReceivedError(view, request, error)
                 if (!isNetworkAvailable()) {
                     showNoInternetPage()
                 }
@@ -318,7 +277,7 @@ class MainActivity : AppCompatActivity() {
 
         if (hasFocus) {
             hideSystemUI()
-            // 🔥 TAMBAHAN: Cek ulang koneksi saat aplikasi mendapat fokus
+            // Cek ulang koneksi saat kembali ke aplikasi
             if (!isOnline && isNetworkAvailable()) {
                 isOnline = true
                 webView.loadUrl(examUrl)
@@ -332,7 +291,7 @@ class MainActivity : AppCompatActivity() {
         // jika siswa menolak sematkan → aplikasi keluar
         checkLockTaskActive()
         
-        // 🔥 TAMBAHAN: Cek koneksi saat resume
+        // Cek koneksi saat resume
         if (!isNetworkAvailable()) {
             showNoInternetPage()
         }
@@ -342,7 +301,7 @@ class MainActivity : AppCompatActivity() {
      * Tombol BACK
      */
     override fun onBackPressed() {
-        // 🔥 TAMBAHAN: Jika offline, reload untuk cek koneksi
+        // Jika offline, reload untuk cek koneksi
         if (!isNetworkAvailable()) {
             checkInternetAndLoad()
             return
@@ -389,6 +348,6 @@ class MainActivity : AppCompatActivity() {
 
     override fun onDestroy() {
         super.onDestroy()
-        mainHandler.removeCallbacksAndMessages(null)  // 🔥 TAMBAHAN
+        mainHandler.removeCallbacksAndMessages(null)
     }
 }
