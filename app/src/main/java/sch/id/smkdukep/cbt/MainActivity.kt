@@ -53,12 +53,23 @@ class MainActivity : AppCompatActivity() {
 
         setupWebView()
 
-        // 🔥 KRUSIAL: CEK INTERNET, JIKA TIDAK ADA, LANGSUNG TAMPILKAN OFFLINE
-        if (!isNetworkAvailable()) {
-            showNoInternetPage()
-        } else {
-            webView.loadUrl(examUrl)
-        }
+        // 🔥 DELAY agar koneksi benar-benar siap
+        mainHandler.postDelayed({
+
+            Thread {
+                val isConnected = isInternetReallyAvailable()
+
+                runOnUiThread {
+                    if (isConnected) {
+                        webView.loadUrl(examUrl)
+                    } else {
+                        showNoInternetPage()
+                    }
+                }
+
+            }.start()
+
+        }, 1500)
 
         hideSystemUI()
         startKioskMode()
@@ -66,26 +77,41 @@ class MainActivity : AppCompatActivity() {
     }
 
     /**
-     * Cek koneksi internet
+     * Cek koneksi jaringan (masih dipakai sebagai fallback)
      */
     private fun isNetworkAvailable(): Boolean {
-        try {
-            val connectivityManager = getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
+        return try {
+            val connectivityManager =
+                getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
+
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
                 val network = connectivityManager.activeNetwork
                 val capabilities = connectivityManager.getNetworkCapabilities(network)
-                return capabilities != null && (
-                    capabilities.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) ||
-                    capabilities.hasTransport(NetworkCapabilities.TRANSPORT_CELLULAR) ||
-                    capabilities.hasTransport(NetworkCapabilities.TRANSPORT_ETHERNET)
-                )
+                capabilities != null && (
+                        capabilities.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) ||
+                                capabilities.hasTransport(NetworkCapabilities.TRANSPORT_CELLULAR) ||
+                                capabilities.hasTransport(NetworkCapabilities.TRANSPORT_ETHERNET)
+                        )
             } else {
                 @Suppress("DEPRECATION")
                 val networkInfo = connectivityManager.activeNetworkInfo
-                return networkInfo != null && networkInfo.isConnected
+                networkInfo != null && networkInfo.isConnected
             }
         } catch (e: Exception) {
-            return false
+            false
+        }
+    }
+
+    /**
+     * 🔥 Cek internet REAL (lebih akurat)
+     */
+    private fun isInternetReallyAvailable(): Boolean {
+        return try {
+            val process = Runtime.getRuntime().exec("ping -c 1 smkdukep.sch.id")
+            val returnVal = process.waitFor()
+            returnVal == 0
+        } catch (e: Exception) {
+            false
         }
     }
 
@@ -141,7 +167,7 @@ class MainActivity : AppCompatActivity() {
             </body>
             </html>
         """.trimIndent()
-        
+
         webView.loadDataWithBaseURL(null, noInternetHtml, "text/html", "UTF-8", null)
         Toast.makeText(this, "⚠️ Tidak ada koneksi internet", Toast.LENGTH_LONG).show()
     }
@@ -152,7 +178,6 @@ class MainActivity : AppCompatActivity() {
     private fun setupWebView() {
 
         webView.settings.apply {
-
             javaScriptEnabled = true
             domStorageEnabled = true
             databaseEnabled = true
@@ -174,7 +199,6 @@ class MainActivity : AppCompatActivity() {
 
                 if (url == null) return false
 
-                // 🔒 hanya domain sekolah
                 if (!url.contains(allowedDomain)) {
                     return true
                 }
@@ -190,46 +214,47 @@ class MainActivity : AppCompatActivity() {
 
             override fun onPageFinished(view: WebView?, url: String?) {
                 super.onPageFinished(view, url)
-                // 🔥 SEMBUNYIKAN ERROR PAGE DEFAULT WEBVIEW
-                view?.loadUrl("javascript:(function() { " +
-                    "var errorElements = document.querySelectorAll('[class*=\"error\"], [id*=\"error\"]'); " +
-                    "for(var i=0; i<errorElements.length; i++) { " +
-                    "if(errorElements[i].innerText.indexOf('net::ERR') > -1) { " +
-                    "errorElements[i].style.display='none'; } } })()")
+
+                view?.loadUrl(
+                    "javascript:(function() { " +
+                            "var errorElements = document.querySelectorAll('[class*=\"error\"], [id*=\"error\"]'); " +
+                            "for(var i=0; i<errorElements.length; i++) { " +
+                            "if(errorElements[i].innerText.indexOf('net::ERR') > -1) { " +
+                            "errorElements[i].style.display='none'; } } })()"
+                )
+            }
+
+            override fun onReceivedError(
+                view: WebView?,
+                request: android.webkit.WebResourceRequest?,
+                error: android.webkit.WebResourceError?
+            ) {
+                super.onReceivedError(view, request, error)
+
+                if (request?.isForMainFrame == true) {
+                    showNoInternetPage()
+                }
             }
         }
     }
 
-    /**
-     * 🔒 Aktifkan kiosk mode
-     */
     private fun startKioskMode() {
-
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
-
             try {
-
                 if (devicePolicyManager.isDeviceOwnerApp(packageName)) {
-
                     devicePolicyManager.setLockTaskPackages(
                         adminComponent,
                         arrayOf(packageName)
                     )
                 }
-
                 startLockTask()
-
             } catch (e: Exception) {
                 e.printStackTrace()
             }
         }
     }
 
-    /**
-     * 🔒 Cek apakah aplikasi benar-benar disematkan
-     */
     private fun checkLockTaskActive() {
-
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
 
             val activityManager =
@@ -249,11 +274,7 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    /**
-     * 🔒 Fullscreen
-     */
     private fun hideSystemUI() {
-
         window.decorView.systemUiVisibility =
             View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY or
                     View.SYSTEM_UI_FLAG_FULLSCREEN or
@@ -264,26 +285,27 @@ class MainActivity : AppCompatActivity() {
 
     override fun onWindowFocusChanged(hasFocus: Boolean) {
         super.onWindowFocusChanged(hasFocus)
-
-        if (hasFocus) {
-            hideSystemUI()
-        }
+        if (hasFocus) hideSystemUI()
     }
 
     override fun onResume() {
         super.onResume()
 
         checkLockTaskActive()
-        
-        // 🔥 CEK KONEKSI SAAT RESUME
-        if (isNetworkAvailable()) {
-            // Jika ada internet, reload URL jika sedang offline
-            if (webView.url == null || webView.url?.startsWith("data") == true) {
-                webView.loadUrl(examUrl)
+
+        Thread {
+            val isConnected = isInternetReallyAvailable()
+
+            runOnUiThread {
+                if (isConnected) {
+                    if (webView.url == null || webView.url?.startsWith("data") == true) {
+                        webView.loadUrl(examUrl)
+                    }
+                } else {
+                    showNoInternetPage()
+                }
             }
-        } else {
-            showNoInternetPage()
-        }
+        }.start()
     }
 
     override fun onBackPressed() {
