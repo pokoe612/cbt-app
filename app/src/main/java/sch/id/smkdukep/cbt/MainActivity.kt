@@ -7,7 +7,6 @@ import android.content.ComponentName
 import android.content.Context
 import android.net.ConnectivityManager
 import android.net.NetworkCapabilities
-import android.net.NetworkRequest
 import android.os.Build
 import android.os.Bundle
 import android.os.Handler
@@ -32,7 +31,6 @@ class MainActivity : AppCompatActivity() {
     private val allowedDomain = "smkdukep.sch.id"
 
     private var isExiting = false
-    private var hasShownOffline = false
     private val mainHandler = Handler(Looper.getMainLooper())
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -55,14 +53,12 @@ class MainActivity : AppCompatActivity() {
 
         setupWebView()
 
-        // 🔥 TUNDA LOAD 1 DETIK, BERI WAKTU KONEKSI SIAP
-        mainHandler.postDelayed({
-            if (isNetworkAvailable()) {
-                webView.loadUrl(examUrl)
-            } else {
-                showNoInternetPage()
-            }
-        }, 1000)
+        // 🔥 KRUSIAL: CEK INTERNET, JIKA TIDAK ADA, LANGSUNG TAMPILKAN OFFLINE
+        if (!isNetworkAvailable()) {
+            showNoInternetPage()
+        } else {
+            webView.loadUrl(examUrl)
+        }
 
         hideSystemUI()
         startKioskMode()
@@ -70,12 +66,11 @@ class MainActivity : AppCompatActivity() {
     }
 
     /**
-     * Cek koneksi internet - LEBIH AKURAT
+     * Cek koneksi internet
      */
     private fun isNetworkAvailable(): Boolean {
         try {
             val connectivityManager = getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
-            
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
                 val network = connectivityManager.activeNetwork
                 val capabilities = connectivityManager.getNetworkCapabilities(network)
@@ -83,14 +78,14 @@ class MainActivity : AppCompatActivity() {
                     capabilities.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) ||
                     capabilities.hasTransport(NetworkCapabilities.TRANSPORT_CELLULAR) ||
                     capabilities.hasTransport(NetworkCapabilities.TRANSPORT_ETHERNET)
-                ) && capabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
+                )
             } else {
                 @Suppress("DEPRECATION")
                 val networkInfo = connectivityManager.activeNetworkInfo
-                return networkInfo != null && networkInfo.isConnected && networkInfo.isAvailable
+                return networkInfo != null && networkInfo.isConnected
             }
         } catch (e: Exception) {
-            return true
+            return false
         }
     }
 
@@ -98,8 +93,6 @@ class MainActivity : AppCompatActivity() {
      * Tampilkan halaman no internet
      */
     private fun showNoInternetPage() {
-        hasShownOffline = true
-        
         val noInternetHtml = """
             <html>
             <head>
@@ -143,7 +136,7 @@ class MainActivity : AppCompatActivity() {
                     <div class="icon">🌐</div>
                     <h1>Tidak Ada Koneksi Internet</h1>
                     <p>Periksa kembali koneksi internet Anda dan pastikan Anda terhubung ke jaringan.</p>
-                    <button onclick="window.location.reload()">Coba Lagi</button>
+                    <button onclick="location.reload()">Coba Lagi</button>
                 </div>
             </body>
             </html>
@@ -195,17 +188,14 @@ class MainActivity : AppCompatActivity() {
                 return true
             }
 
-            override fun onReceivedError(
-                view: WebView?,
-                errorCode: Int,
-                description: String?,
-                failingUrl: String?
-            ) {
-                super.onReceivedError(view, errorCode, description, failingUrl)
-                // Hanya tampilkan offline jika benar-benar tidak ada internet
-                if (!isNetworkAvailable() && !hasShownOffline && failingUrl?.contains(allowedDomain) == true) {
-                    showNoInternetPage()
-                }
+            override fun onPageFinished(view: WebView?, url: String?) {
+                super.onPageFinished(view, url)
+                // 🔥 SEMBUNYIKAN ERROR PAGE DEFAULT WEBVIEW
+                view?.loadUrl("javascript:(function() { " +
+                    "var errorElements = document.querySelectorAll('[class*=\"error\"], [id*=\"error\"]'); " +
+                    "for(var i=0; i<errorElements.length; i++) { " +
+                    "if(errorElements[i].innerText.indexOf('net::ERR') > -1) { " +
+                    "errorElements[i].style.display='none'; } } })()")
             }
         }
     }
@@ -285,15 +275,15 @@ class MainActivity : AppCompatActivity() {
 
         checkLockTaskActive()
         
-        // Cek koneksi saat resume
-        mainHandler.postDelayed({
-            if (isNetworkAvailable() && hasShownOffline) {
-                hasShownOffline = false
+        // 🔥 CEK KONEKSI SAAT RESUME
+        if (isNetworkAvailable()) {
+            // Jika ada internet, reload URL jika sedang offline
+            if (webView.url == null || webView.url?.startsWith("data") == true) {
                 webView.loadUrl(examUrl)
-            } else if (!isNetworkAvailable() && !hasShownOffline) {
-                showNoInternetPage()
             }
-        }, 500)
+        } else {
+            showNoInternetPage()
+        }
     }
 
     override fun onBackPressed() {
@@ -329,10 +319,5 @@ class MainActivity : AppCompatActivity() {
         }
 
         finishAffinity()
-    }
-
-    override fun onDestroy() {
-        super.onDestroy()
-        mainHandler.removeCallbacksAndMessages(null)
     }
 }
