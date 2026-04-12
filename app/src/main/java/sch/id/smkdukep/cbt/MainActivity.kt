@@ -9,8 +9,6 @@ import android.net.ConnectivityManager
 import android.net.NetworkCapabilities
 import android.os.Build
 import android.os.Bundle
-import android.os.Handler
-import android.os.Looper
 import android.view.View
 import android.view.WindowManager
 import android.webkit.CookieManager
@@ -31,8 +29,6 @@ class MainActivity : AppCompatActivity() {
     private val allowedDomain = "smkdukep.sch.id"
 
     private var isExiting = false
-    private var isFirstLoad = true
-    private val mainHandler = Handler(Looper.getMainLooper())
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -54,10 +50,11 @@ class MainActivity : AppCompatActivity() {
 
         setupWebView()
 
-        // 🔥 CEK INTERNET SEBELUM LOAD URL
+        // 🔥 KRUSIAL: JANGAN LOAD URL DULU, CEK INTERNET TERLEBIH DAHULU
         if (isNetworkAvailable()) {
             webView.loadUrl(examUrl)
         } else {
+            // 🔥 TAMPILKAN HTML LANGSUNG, TANPA PERNAH LOAD URL
             showNoInternetPage()
         }
 
@@ -144,7 +141,7 @@ class MainActivity : AppCompatActivity() {
             </html>
         """.trimIndent()
         
-        // 🔥 LANGSUNG tampilkan HTML
+        // 🔥 KRUSIAL: loadDataWithBaseURL, BUKAN loadUrl
         webView.loadDataWithBaseURL(null, noInternetHtml, "text/html", "UTF-8", null)
     }
 
@@ -164,7 +161,7 @@ class MainActivity : AppCompatActivity() {
             useWideViewPort = true
             loadWithOverviewMode = true
 
-            cacheMode = WebSettings.LOAD_DEFAULT
+            cacheMode = WebSettings.LOAD_CACHE_ELSE_NETWORK
 
             setSupportZoom(false)
             builtInZoomControls = false
@@ -181,6 +178,12 @@ class MainActivity : AppCompatActivity() {
 
                 if (url == null) return false
 
+                // 🔥 CEK INTERNET SEBELUM LOAD URL
+                if (!isNetworkAvailable()) {
+                    showNoInternetPage()
+                    return true
+                }
+
                 // 🔒 hanya domain sekolah
                 if (!url.contains(allowedDomain)) {
                     return true
@@ -195,15 +198,15 @@ class MainActivity : AppCompatActivity() {
                 return true
             }
 
-            // 🔥 Cegah error page default WebView
+            // 🔥 TANGANI ERROR - TAPI JANGAN TAMPILKAN ERROR PAGE DEFAULT
             override fun onReceivedError(
                 view: WebView?,
                 errorCode: Int,
                 description: String?,
                 failingUrl: String?
             ) {
-                // Jangan tampilkan error page default
-                if (!isNetworkAvailable() && failingUrl?.contains(allowedDomain) == true) {
+                // JANGAN panggil super, biar tidak muncul error page default
+                if (!isNetworkAvailable()) {
                     showNoInternetPage()
                 }
             }
@@ -286,10 +289,10 @@ class MainActivity : AppCompatActivity() {
         // jika siswa menolak sematkan → aplikasi keluar
         checkLockTaskActive()
         
-        // 🔥 Cek koneksi saat resume, reload jika perlu
+        // 🔥 Cek koneksi saat resume
         if (isNetworkAvailable()) {
-            val currentUrl = webView.url
-            if (currentUrl != null && currentUrl.contains("no_internet")) {
+            // Jika ada internet dan halaman sedang offline, reload
+            if (webView.url == null || webView.url?.startsWith("data") == true) {
                 webView.loadUrl(examUrl)
             }
         } else {
