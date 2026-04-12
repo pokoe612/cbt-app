@@ -9,6 +9,8 @@ import android.net.ConnectivityManager
 import android.net.NetworkCapabilities
 import android.os.Build
 import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
 import android.view.View
 import android.view.WindowManager
 import android.webkit.CookieManager
@@ -29,6 +31,7 @@ class MainActivity : AppCompatActivity() {
     private val allowedDomain = "smkdukep.sch.id"
 
     private var isExiting = false
+    private var isOfflineMode = false
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -50,11 +53,12 @@ class MainActivity : AppCompatActivity() {
 
         setupWebView()
 
-        // 🔥 KRUSIAL: JANGAN LOAD URL DULU, CEK INTERNET TERLEBIH DAHULU
+        // CEK INTERNET
         if (isNetworkAvailable()) {
+            isOfflineMode = false
             webView.loadUrl(examUrl)
         } else {
-            // 🔥 TAMPILKAN HTML LANGSUNG, TANPA PERNAH LOAD URL
+            isOfflineMode = true
             showNoInternetPage()
         }
 
@@ -92,6 +96,7 @@ class MainActivity : AppCompatActivity() {
      * Tampilkan halaman no internet
      */
     private fun showNoInternetPage() {
+        isOfflineMode = true
         val noInternetHtml = """
             <html>
             <head>
@@ -141,7 +146,6 @@ class MainActivity : AppCompatActivity() {
             </html>
         """.trimIndent()
         
-        // 🔥 KRUSIAL: loadDataWithBaseURL, BUKAN loadUrl
         webView.loadDataWithBaseURL(null, noInternetHtml, "text/html", "UTF-8", null)
     }
 
@@ -161,7 +165,8 @@ class MainActivity : AppCompatActivity() {
             useWideViewPort = true
             loadWithOverviewMode = true
 
-            cacheMode = WebSettings.LOAD_CACHE_ELSE_NETWORK
+            // 🔥 PENTING: Gunakan LOAD_DEFAULT agar CSS/JS terload dengan benar
+            cacheMode = WebSettings.LOAD_DEFAULT
 
             setSupportZoom(false)
             builtInZoomControls = false
@@ -178,12 +183,6 @@ class MainActivity : AppCompatActivity() {
 
                 if (url == null) return false
 
-                // 🔥 CEK INTERNET SEBELUM LOAD URL
-                if (!isNetworkAvailable()) {
-                    showNoInternetPage()
-                    return true
-                }
-
                 // 🔒 hanya domain sekolah
                 if (!url.contains(allowedDomain)) {
                     return true
@@ -198,15 +197,25 @@ class MainActivity : AppCompatActivity() {
                 return true
             }
 
-            // 🔥 TANGANI ERROR - TAPI JANGAN TAMPILKAN ERROR PAGE DEFAULT
+            override fun onPageFinished(view: WebView?, url: String?) {
+                super.onPageFinished(view, url)
+                // Sembunyikan error jika ada
+                view?.loadUrl("javascript:(function() { " +
+                    "var elements = document.getElementsByTagName('*'); " +
+                    "for(var i=0; i<elements.length; i++) { " +
+                    "if(elements[i].innerHTML && elements[i].innerHTML.indexOf('net::ERR') > -1) { " +
+                    "elements[i].style.display='none'; } } })()")
+            }
+
             override fun onReceivedError(
                 view: WebView?,
                 errorCode: Int,
                 description: String?,
                 failingUrl: String?
             ) {
-                // JANGAN panggil super, biar tidak muncul error page default
-                if (!isNetworkAvailable()) {
+                super.onReceivedError(view, errorCode, description, failingUrl)
+                // Hanya tampilkan offline jika benar-benar tidak ada internet
+                if (!isNetworkAvailable() && failingUrl?.contains(allowedDomain) == true) {
                     showNoInternetPage()
                 }
             }
@@ -286,16 +295,14 @@ class MainActivity : AppCompatActivity() {
     override fun onResume() {
         super.onResume()
 
-        // jika siswa menolak sematkan → aplikasi keluar
         checkLockTaskActive()
         
-        // 🔥 Cek koneksi saat resume
-        if (isNetworkAvailable()) {
-            // Jika ada internet dan halaman sedang offline, reload
-            if (webView.url == null || webView.url?.startsWith("data") == true) {
-                webView.loadUrl(examUrl)
-            }
-        } else {
+        // 🔥 CEK KONEKSI SAAT RESUME, TAPI JANGAN FORCE RELOAD
+        if (isNetworkAvailable() && isOfflineMode) {
+            isOfflineMode = false
+            webView.loadUrl(examUrl)
+        } else if (!isNetworkAvailable() && !isOfflineMode) {
+            isOfflineMode = true
             showNoInternetPage()
         }
     }
